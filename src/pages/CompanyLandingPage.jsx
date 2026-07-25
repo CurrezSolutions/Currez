@@ -68,46 +68,65 @@ const HOW_IT_WORKS = [
   },
 ];
 
-// Custom sits in the middle and is the only plan actually offered right
-// now — Starter/Growth pricing isn't finalized yet, so they're shown as a
-// preview (marked "Coming soon") rather than something bookable.
+// 3-Tier Subscription Plans for Hospitals & Clinics in Maharashtra
 const PRICING_TIERS = [
   {
-    name: "Starter",
-    price: "₹15k",
+    name: "Essential (Clinic)",
+    price: "₹1,499",
+    originalPrice: "₹1,999",
     period: "/mo",
-    tagline: "For single-facility clinics & nursing homes. Up to 50 beds.",
+    badge: "25% OFF",
+    tagline: "For standalone OPD clinics, specialist doctors & polyclinics.",
     features: [
-      "Patient records & OPD scheduling",
-      "Billing & invoicing",
-      "Email support",
+      "Up to 3 Doctors & 2 Staff Seats",
+      "Avg 60 Patients/day (1,800/mo cap)",
+      "OPD Queue & Real-Time Token Tracker",
+      "E-Prescription Builder & PDF Printouts",
+      "Branded Booking Page & Doctor Profile",
+      "500 Free Email Notifications / mo",
+      "Extra Module Add-On @ ₹599/mo",
     ],
-    comingSoon: true,
+    cta: "Start Essential",
+    highlighted: false,
   },
   {
-    name: "Custom",
-    price: null,
-    period: "",
-    tagline: "For hospital groups & chains. Unlimited beds & sites.",
+    name: "Growth (Nursing Home)",
+    price: "₹4,499",
+    originalPrice: "₹5,999",
+    period: "/mo",
+    badge: "Most Popular — 25% OFF",
+    tagline: "For 10–50 Bed nursing homes & specialty hospitals.",
     features: [
-      "Everything in Growth",
-      "Multi-hospital management",
-      "Dedicated success manager",
+      "Up to 12 Doctors, 8 Staff & 3 Admins",
+      "Up to 50 IPD Beds & Ward Allocation",
+      "Avg 200 Patients/day (6,000/mo cap)",
+      "Itemized Billing & Invoicing",
+      "Lab & Diagnostics Reports Upload",
+      "Operational & Financial Analytics",
+      "2,500 Free Email Notifications / mo",
+      "Extra Module Add-On @ ₹599/mo",
     ],
-    cta: "Talk to sales",
+    cta: "Choose Growth",
     highlighted: true,
   },
   {
-    name: "Growth",
-    price: "₹42k",
+    name: "Enterprise (Multispecialty)",
+    price: "₹11,199",
+    originalPrice: "₹14,999",
     period: "/mo",
-    tagline: "For multi-department hospitals. Up to 250 beds.",
+    badge: "25% OFF",
+    tagline: "For 50+ Bed tertiary hospitals & hospital chains.",
     features: [
-      "Everything in Starter",
-      "Multi-doctor scheduling",
-      "Priority support",
+      "UNLIMITED Doctors, Staff & Admins",
+      "UNLIMITED IPD Beds & Wards",
+      "UNLIMITED Daily Patients & Records",
+      "ALL Modules Included (Beds, Billing, Labs)",
+      "Custom Subdomain / Hospital Domain",
+      "10,000 Free Email Notifications / mo",
+      "Dedicated Success Manager & 24/7 Support",
     ],
-    comingSoon: true,
+    cta: "Contact Sales",
+    highlighted: false,
   },
 ];
 
@@ -397,12 +416,19 @@ function CompanyLandingPage() {
       {/* Pricing */}
       <section id="pricing" className={`py-24 ${CONTAINER}`}>
         <Reveal>
-          <p className="font-plex-mono text-xs uppercase tracking-[0.25em] text-accent">
-            Pricing
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-            Simple, hospital-sized plans
-          </h2>
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <p className="font-plex-mono text-xs uppercase tracking-[0.25em] text-accent">
+                Pricing & Subscription Plans
+              </p>
+              <h2 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
+                Simple, transparent plans for every hospital size
+              </h2>
+            </div>
+            <div className="rounded-full bg-accent/10 px-4 py-1.5 font-plex-mono text-xs font-semibold text-accent border border-accent/20">
+              🔥 Special Launch Offer: 25% OFF
+            </div>
+          </div>
         </Reveal>
 
         <div className="mt-10 grid gap-6 md:grid-cols-3">
@@ -410,65 +436,83 @@ function CompanyLandingPage() {
             <Reveal
               key={tier.name}
               delay={i * 100}
-              className={`relative rounded-2xl border p-6 transition-all duration-200 ${
-                tier.comingSoon
-                  ? "border-line opacity-70"
-                  : "border-accent/40 bg-paper text-ink hover:-translate-y-1"
+              className={`relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200 ${
+                tier.highlighted
+                  ? "border-accent bg-surface text-heading shadow-xl shadow-accent/10 ring-1 ring-accent/40 hover:-translate-y-1"
+                  : "border-line bg-surface text-heading hover:-translate-y-1 hover:border-accent/40"
               }`}
             >
-              {tier.comingSoon ? (
-                <span className="absolute -top-3 right-6 -rotate-3 rounded-sm bg-card-strong px-2.5 py-1 font-plex-mono text-[10px] font-semibold uppercase tracking-wide text-muted ring-1 ring-line">
-                  Coming soon
-                </span>
-              ) : (
-                <span className="absolute -top-3 right-6 -rotate-3 rounded-sm bg-stamp px-2.5 py-1 font-plex-mono text-[10px] font-semibold uppercase tracking-wide text-white">
-                  Available now
-                </span>
-              )}
-              <p
-                className={`font-plex-mono text-xs font-semibold uppercase tracking-wide ${
-                  tier.comingSoon ? "text-faint" : "text-ink/60"
-                }`}
-              >
-                {tier.name}
-              </p>
-              {/* Pricing & feature list aren't finalized for this tier yet —
-                  blurred rather than shown as real numbers, so nobody reads
-                  ₹15k/₹42k as a committed price. */}
-              <div className={tier.comingSoon ? "pointer-events-none select-none blur-sm" : undefined}>
-                <p className="mt-2 font-display text-3xl font-semibold">
-                  {tier.price || "Custom"}
-                  {tier.period && (
-                    <span className={`font-plex text-base font-normal ${tier.comingSoon ? "text-faint" : "text-ink/50"}`}>
-                      {tier.period}
+              <div>
+                {tier.badge && (
+                  <span
+                    className={`absolute -top-3 right-6 rounded-md px-2.5 py-1 font-plex-mono text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ${
+                      tier.highlighted ? "bg-accent" : "bg-stamp"
+                    }`}
+                  >
+                    {tier.badge}
+                  </span>
+                )}
+                <p className="font-plex-mono text-xs font-semibold uppercase tracking-wide text-accent">
+                  {tier.name}
+                </p>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="font-display text-3xl font-semibold sm:text-4xl text-heading">
+                    {tier.price}
+                  </span>
+                  <span className="font-plex text-sm text-body">
+                    {tier.period}
+                  </span>
+                  {tier.originalPrice && (
+                    <span className="font-plex text-sm text-muted line-through">
+                      {tier.originalPrice}
                     </span>
                   )}
-                </p>
-                <p className={`mt-2 text-sm ${tier.comingSoon ? "text-body" : "text-ink/70"}`}>{tier.tagline}</p>
-                <ul className={`mt-5 space-y-2 text-sm ${tier.comingSoon ? "text-body" : "text-ink/80"}`}>
+                </div>
+                <p className="mt-2 text-sm text-body">{tier.tagline}</p>
+                <div className="my-5 h-px bg-line" />
+                <ul className="space-y-2.5 text-sm text-body">
                   {tier.features.map((f) => (
                     <li key={f} className="flex items-start gap-2">
-                      <span className={`mt-0.5 ${tier.comingSoon ? "text-faint" : "text-accent"}`}>&#10003;</span>
-                      {f}
+                      <span className="mt-0.5 text-accent font-bold">&#10003;</span>
+                      <span>{f}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-              {tier.comingSoon ? (
-                <span className="mt-6 block cursor-not-allowed rounded-lg border border-line-strong px-4 py-2 text-center text-sm font-medium text-faint">
-                  Coming soon
-                </span>
-              ) : (
-                <button
-                  onClick={() => setActiveModal("sales")}
-                  className="mt-6 block w-full cursor-pointer rounded-lg bg-accent px-4 py-2 text-center text-sm font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  {tier.cta}
-                </button>
-              )}
+
+              <button
+                onClick={() => setActiveModal("sales")}
+                className={`mt-8 block w-full cursor-pointer rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition-all duration-200 ${
+                  tier.highlighted
+                    ? "bg-accent text-ink hover:opacity-90 hover:-translate-y-0.5 shadow-md"
+                    : "border border-line-strong bg-card-strong text-heading hover:bg-card hover:border-accent hover:-translate-y-0.5"
+                }`}
+              >
+                {tier.cta}
+              </button>
             </Reveal>
           ))}
         </div>
+
+        {/* Add-on Banner */}
+        <Reveal delay={300} className="mt-8">
+          <div className="rounded-xl border border-accent/30 bg-card-strong p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left shadow-sm">
+            <div>
+              <p className="font-semibold text-sm text-heading">
+                💡 Need Modular Customization?
+              </p>
+              <p className="text-xs text-body mt-0.5">
+                Add Bed Management, Itemized Billing, E-Prescriptions or Lab Reports to any plan for flat <span className="font-semibold text-accent">₹599 / month</span> per module.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveModal("sales")}
+              className="shrink-0 rounded-lg border border-accent/60 bg-accent/10 px-4 py-2 text-xs font-semibold text-accent hover:bg-accent hover:text-ink transition-all duration-200 cursor-pointer"
+            >
+              Explore Add-Ons
+            </button>
+          </div>
+        </Reveal>
       </section>
 
       {/* Testimonial */}
@@ -503,6 +547,11 @@ function CompanyLandingPage() {
             Reach out and we'll get your hospital's branded booking site live in
             minutes.
           </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-white/80 font-plex">
+            <span>📧 <a href="mailto:support@currez.in" className="hover:text-accent-glow underline">support@currez.in</a></span>
+            <span>📧 <a href="mailto:medideskpro@gmail.com" className="hover:text-accent-glow underline">medideskpro@gmail.com</a></span>
+            <span>📞 <a href="tel:+919284378620" className="hover:text-accent-glow">+91 9284378620</a> / <a href="tel:+918806676181" className="hover:text-accent-glow">+91 8806676181</a></span>
+          </div>
           <button
             onClick={() => setActiveModal("onboard")}
             className="mt-8 inline-block cursor-pointer rounded-lg bg-accent-glow px-6 py-3 text-sm font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-accent-glow/30"
@@ -537,9 +586,12 @@ function CompanyLandingPage() {
       <footer
         className={`flex flex-col items-center justify-between gap-4 border-t border-line py-8 font-plex-mono text-[11px] text-faint sm:flex-row ${CONTAINER}`}
       >
-        <p>
-          © {new Date().getFullYear()} Currez Technologies. All rights reserved.
-        </p>
+        <div>
+          <p>© {new Date().getFullYear()} Currez Technologies. All rights reserved.</p>
+          <p className="mt-1 text-muted">
+            Support: <a href="mailto:support@currez.in" className="hover:text-heading underline">support@currez.in</a> | Sales: <a href="mailto:medideskpro@gmail.com" className="hover:text-heading underline">medideskpro@gmail.com</a>
+          </p>
+        </div>
         <div className="flex flex-wrap justify-center gap-6 uppercase tracking-wide">
           {NAV_LINKS.map((link) => (
             <a

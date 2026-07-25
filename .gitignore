@@ -37,3 +37,9 @@ Thumbs.db
 
 # Vite
 *.tsbuildinfo
+
+# Generated Assets & Media
+assets/designs/
+assets/leads/
+
+
