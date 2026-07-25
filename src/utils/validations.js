@@ -23,8 +23,11 @@ export const validators = {
   url: (msg) => (value) => {
     if (!value) return undefined
     try {
-      new URL(value)
-      return undefined
+      const parsed = new URL(value)
+      // http(s) only — new URL() alone accepts any scheme, including
+      // javascript:/data:, which would parse "successfully" here and pass
+      // straight through to an <img src>/CSS url()/background-image.
+      return ['http:', 'https:'].includes(parsed.protocol) ? undefined : msg
     } catch {
       return msg
     }

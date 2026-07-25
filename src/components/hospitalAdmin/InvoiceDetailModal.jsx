@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { addInvoiceCharge, recordInvoicePayment, subscribeInvoicePayments, voidInvoice } from '../../firebase/billing'
+import { logActivity } from '../../firebase/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../common/Modal'
-import ConfirmModal from '../common/ConfirmModal'
+import VoidInvoiceModal from './VoidInvoiceModal'
 import PrintPortal from '../common/PrintPortal'
 import NavIcon from '../common/NavIcon'
 
@@ -181,7 +182,6 @@ function InvoiceDetailModal({ invoice, hospital, canRecordPayment, canVoid, onCl
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [recording, setRecording] = useState(false)
   const [showVoidConfirm, setShowVoidConfirm] = useState(false)
-  const [voiding, setVoiding] = useState(false)
   const [error, setError] = useState('')
 
   const amountPaid = invoice.amountPaid || 0
@@ -236,17 +236,19 @@ function InvoiceDetailModal({ invoice, hospital, canRecordPayment, canVoid, onCl
     }
   }
 
-  async function handleVoid() {
-    setVoiding(true)
-    try {
-      await voidInvoice(invoice.id, { voidedBy: user.uid, reason: 'Voided from Billing' })
-      setShowVoidConfirm(false)
-    } catch (err) {
-      setError(err.message)
-      setShowVoidConfirm(false)
-    } finally {
-      setVoiding(false)
-    }
+  async function handleVoid(reason) {
+    await voidInvoice(invoice.id, { voidedBy: user.uid, reason })
+    logActivity({
+      hospitalId: invoice.hospitalId,
+      action: 'invoice.voided',
+      actorUid: user.uid,
+      actorEmail: user.email,
+      targetType: 'invoice',
+      targetId: invoice.id,
+      targetLabel: `${invoice.invoiceNumber || invoice.id} — ${invoice.patientName || 'Unknown'} (${formatMoney(invoice.total)})`,
+      details: reason,
+    })
+    setShowVoidConfirm(false)
   }
 
   return (
@@ -376,12 +378,8 @@ function InvoiceDetailModal({ invoice, hospital, canRecordPayment, canVoid, onCl
       </div>
 
       {showVoidConfirm && (
-        <ConfirmModal
-          title="Void this invoice?"
-          message={`This marks the ${formatMoney(invoice.total)} invoice for ${invoice.patientName || 'this patient'} as void. It stays on record but no longer counts toward collections or dues.`}
-          confirmLabel="Void invoice"
-          danger
-          busy={voiding}
+        <VoidInvoiceModal
+          invoice={invoice}
           onConfirm={handleVoid}
           onCancel={() => setShowVoidConfirm(false)}
         />

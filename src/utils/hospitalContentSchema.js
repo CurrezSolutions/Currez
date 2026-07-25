@@ -34,7 +34,7 @@ export const CONTENT_SECTIONS = [
     fields: [
       { name: 'name', label: 'Name', type: 'text' },
       { name: 'message', label: 'Message', type: 'text' },
-      { name: 'rating', label: 'Rating (1-5)', type: 'number' },
+      { name: 'rating', label: 'Rating (1-5)', type: 'number', min: 1, max: 5 },
     ],
   },
 ]

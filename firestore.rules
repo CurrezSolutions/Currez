@@ -49,6 +49,35 @@ service cloud.firestore {
         currentUserDoc().status == 'active';
     }
 
+    // Whether the current staff member may WRITE to a given module for
+    // their own hospital — Hospital Admin always may; a Doctor/Receptionist
+    // may unless their Super-Admin-assigned permissions map explicitly sets
+    // that module below 'edit'. Mirrors src/utils/permissions.js's
+    // getModulePermission/canEditModule exactly, including its "missing
+    // means allowed" default, so a staff member untouched by the Staff
+    // Permissions screen keeps working exactly as before. Reads stay on the
+    // broader isHospitalStaffOf elsewhere — "View only" staff can still see
+    // the data, only writes are narrowed by this function. Before this,
+    // permission levels below Billing were UI-only and unenforced here —
+    // see UAT_SECURITY_REPORT.md §3.2 for the empirical proof.
+    function hasModuleAccess(hospitalId, moduleKey) {
+      return isHospitalStaffOf(hospitalId) &&
+        (currentUserDoc().role == 'HOSPITAL_ADMIN' ||
+         currentUserDoc().get('permissions', {}).get(moduleKey, 'edit') == 'edit');
+    }
+
+    // Companion to hasModuleAccess for READS: 'view' and 'edit' both may
+    // see the data, only 'none' actually hides it — mirrors
+    // canViewModule() in src/utils/permissions.js. Without this, a staff
+    // member explicitly locked out of a module ('none') could still list/
+    // get its data directly, just not write to it; hasModuleAccess alone
+    // only ever narrowed writes.
+    function canViewModuleData(hospitalId, moduleKey) {
+      return isHospitalStaffOf(hospitalId) &&
+        (currentUserDoc().role == 'HOSPITAL_ADMIN' ||
+         currentUserDoc().get('permissions', {}).get(moduleKey, 'edit') != 'none');
+    }
+
     // Reusable guard for any collection that belongs to an optional module
     // (e.g. a future chatbotThreads/{id} doc). Only meant for non-core
     // features — core modules (patients, appointments, ...) are always on
@@ -97,6 +126,23 @@ service cloud.firestore {
         request.resource.data.email == resource.data.email;
     }
 
+    // A Hospital Admin may update their own record's non-identity fields
+    // (display name, etc.) — same frozen fields as the Doctor self-update
+    // above. Without this, neither branch of /users' update rule below ever
+    // matched a Hospital Admin editing their own doc (the hospital-admin-
+    // updates-staff branch requires the *target's* role to be DOCTOR/
+    // RECEPTIONIST; isSelfDoctorScheduleUpdate requires it to be DOCTOR) —
+    // so a Hospital Admin genuinely could not edit their own profile at all.
+    // See UAT_SECURITY_REPORT.md §4.
+    function isSelfHospitalAdminUpdate(uid) {
+      return request.auth != null && request.auth.uid == uid &&
+        resource.data.role == 'HOSPITAL_ADMIN' &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.hospitalId == resource.data.hospitalId &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.email == resource.data.email;
+    }
+
     // Doctor directory entries (name, specialization, schedule) are
     // intentionally public — patients need them to pick a doctor when
     // booking, without any login.
@@ -128,20 +174,31 @@ service cloud.firestore {
          resource.data.role in ['DOCTOR', 'RECEPTIONIST'] &&
          request.resource.data.role == resource.data.role &&
          request.resource.data.hospitalId == resource.data.hospitalId) ||
-        isSelfDoctorScheduleUpdate(uid);
+        isSelfDoctorScheduleUpdate(uid) ||
+        isSelfHospitalAdminUpdate(uid);
 
       allow delete: if isSuperAdmin();
     }
 
     match /patients/{patientId} {
-      allow read: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
+      // Read requires 'view' or 'edit' (canViewModuleData); write requires
+      // 'edit' specifically (hasModuleAccess below) — 'none' hides the
+      // module entirely, 'view' can look but not touch, matching
+      // canViewModule/canEditModule in src/utils/permissions.js exactly.
+      // Closes the gap in UAT_SECURITY_REPORT.md §3.2, where a staff
+      // member explicitly locked out of a module in the Staff Permissions
+      // screen could still read and write its data by calling the SDK
+      // directly — neither level was enforced here before.
+      allow read: if isSuperAdmin() || canViewModuleData(resource.data.hospitalId, 'patients');
       // Public self-service booking creates its own patient record — no
       // login, so this can only be shape-checked, not identity-checked.
-      allow create: if isHospitalStaffOf(request.resource.data.hospitalId) ||
+      allow create: if (isHospitalStaffOf(request.resource.data.hospitalId) &&
+                         hasModuleAccess(request.resource.data.hospitalId, 'patients')) ||
         (request.resource.data.hospitalId is string &&
          request.resource.data.name is string &&
          request.resource.data.phone is string);
-      allow update: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
+      allow update: if isSuperAdmin() ||
+        (isHospitalStaffOf(resource.data.hospitalId) && hasModuleAccess(resource.data.hospitalId, 'patients'));
       allow delete: if isSuperAdmin();
     }
 
@@ -151,12 +208,16 @@ service cloud.firestore {
       // appointment, but never enumerate the collection (allow list stays
       // staff-only below).
       allow get: if true;
-      allow list: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
-      // Staff book already-confirmed appointments; the public booking page
-      // may only create ones that start 'pending' front-desk confirmation.
-      allow create: if isHospitalStaffOf(request.resource.data.hospitalId) ||
+      allow list: if isSuperAdmin() || canViewModuleData(resource.data.hospitalId, 'appointments');
+      // Staff book already-confirmed appointments (narrowed by
+      // hasModuleAccess, same reasoning as /patients above); the public
+      // booking page may only create ones that start 'pending' front-desk
+      // confirmation.
+      allow create: if (isHospitalStaffOf(request.resource.data.hospitalId) &&
+                         hasModuleAccess(request.resource.data.hospitalId, 'appointments')) ||
         (request.resource.data.status == 'pending' && request.resource.data.bookedBy == 'patient');
-      allow update: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
+      allow update: if isSuperAdmin() ||
+        (isHospitalStaffOf(resource.data.hospitalId) && hasModuleAccess(resource.data.hospitalId, 'appointments'));
       allow delete: if isSuperAdmin();
     }
 
@@ -182,11 +243,33 @@ service cloud.firestore {
     match /doctorSlots/{slotId} {
       allow get: if true;
       allow list: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
-      allow create, update: if (request.resource.data.hospitalId is string &&
-                                 request.resource.data.doctorId is string &&
-                                 request.resource.data.date is string &&
-                                 request.resource.data.times is list) ||
-                                isHospitalStaffOf(request.resource.data.hospitalId);
+      // Staff (creating/confirming/rescheduling appointments directly) may
+      // fully replace the times array they manage, narrowed by
+      // hasModuleAccess like /appointments above. The unauthenticated
+      // branch is additive-only — it may only ever create a doc holding
+      // exactly one time, or add exactly one new time to an existing doc
+      // (request adds no more than 1 entry and never removes any of the
+      // ones already there, via hasAll + a size check) — never replace the
+      // whole array. Before this, that branch let anyone anonymously
+      // overwrite any doctor's entire availability in one write (proven
+      // live in UAT_SECURITY_REPORT.md §3.4); this closes that while still
+      // allowing whatever legitimate single-slot claim this branch exists
+      // for.
+      allow create: if (request.resource.data.hospitalId is string &&
+                         request.resource.data.doctorId is string &&
+                         request.resource.data.date is string &&
+                         request.resource.data.times is list &&
+                         request.resource.data.times.size() == 1) ||
+                        (isHospitalStaffOf(request.resource.data.hospitalId) &&
+                         hasModuleAccess(request.resource.data.hospitalId, 'appointments'));
+      allow update: if (request.resource.data.hospitalId is string &&
+                         request.resource.data.doctorId is string &&
+                         request.resource.data.date is string &&
+                         request.resource.data.times is list &&
+                         request.resource.data.times.size() == resource.data.times.size() + 1 &&
+                         request.resource.data.times.hasAll(resource.data.times)) ||
+                        (isHospitalStaffOf(request.resource.data.hospitalId) &&
+                         hasModuleAccess(request.resource.data.hospitalId, 'appointments'));
       allow delete: if isSuperAdmin();
     }
 
@@ -354,25 +437,88 @@ service cloud.firestore {
     // hierarchy for each hospital (one doc per hospital, id == hospitalId),
     // admissions stores individual admission records. Both are feature-gated
     // on the 'bedManagement' key.
+    // Both bedConfig and admissions previously had NO isSuperAdmin() clause
+    // anywhere — the only collections in this whole file without one — so
+    // the Super Admin genuinely could not read or fix a hospital's bed data
+    // for support purposes; a support request meant asking that hospital's
+    // own admin to act. Confirmed by hitting it directly while writing this
+    // fix (see UAT_SECURITY_REPORT.md §3.5). delete stays false for
+    // everyone, superadmin included — admission records are meant to be a
+    // permanent stay history, not something even support can erase; that
+    // part was deliberate, not the gap. Writes are also now narrowed by
+    // hasModuleAccess, same reasoning as /patients and /appointments above.
     match /bedConfig/{hospitalId} {
-      allow get: if isHospitalStaffOf(hospitalId) &&
-        hospitalHasFeature(hospitalId, 'bedManagement');
+      allow get: if isSuperAdmin() ||
+        (canViewModuleData(hospitalId, 'bedManagement') && hospitalHasFeature(hospitalId, 'bedManagement'));
       allow list: if false;
-      allow create, update: if isHospitalAdminOf(hospitalId) &&
-        hospitalHasFeature(hospitalId, 'bedManagement');
+      allow create, update: if isSuperAdmin() ||
+        (isHospitalAdminOf(hospitalId) && hasModuleAccess(hospitalId, 'bedManagement') &&
+         hospitalHasFeature(hospitalId, 'bedManagement'));
       allow delete: if false;
     }
 
     match /admissions/{admissionId} {
-      allow read: if isHospitalStaffOf(resource.data.hospitalId) &&
-        hospitalHasFeature(resource.data.hospitalId, 'bedManagement');
-      allow list: if isHospitalStaffOf(resource.data.hospitalId) &&
-        hospitalHasFeature(resource.data.hospitalId, 'bedManagement');
-      allow create: if isHospitalStaffOf(request.resource.data.hospitalId) &&
-        hospitalHasFeature(request.resource.data.hospitalId, 'bedManagement');
-      allow update: if isHospitalStaffOf(resource.data.hospitalId) &&
-        hospitalHasFeature(resource.data.hospitalId, 'bedManagement');
+      allow read: if isSuperAdmin() ||
+        (canViewModuleData(resource.data.hospitalId, 'bedManagement') && hospitalHasFeature(resource.data.hospitalId, 'bedManagement'));
+      allow list: if isSuperAdmin() ||
+        (canViewModuleData(resource.data.hospitalId, 'bedManagement') && hospitalHasFeature(resource.data.hospitalId, 'bedManagement'));
+      allow create: if isSuperAdmin() ||
+        (isHospitalStaffOf(request.resource.data.hospitalId) &&
+         hasModuleAccess(request.resource.data.hospitalId, 'bedManagement') &&
+         hospitalHasFeature(request.resource.data.hospitalId, 'bedManagement'));
+      allow update: if isSuperAdmin() ||
+        (isHospitalStaffOf(resource.data.hospitalId) &&
+         hasModuleAccess(resource.data.hospitalId, 'bedManagement') &&
+         hospitalHasFeature(resource.data.hospitalId, 'bedManagement'));
       allow delete: if false;
+    }
+
+    // One doc per bed position (id == hospitalId::floorId/wardId/roomId/bedId,
+    // matching bedKey() in src/utils/bedManagement.js), holding the
+    // currently-admitted admission id if any. Exists purely so
+    // admitPatient()/transferAdmission() can claim a bed transactionally —
+    // same pattern doctorSlots already uses to prevent double-booking a
+    // doctor's time slot, now applied to beds. Before this, admitting a
+    // patient was a plain query-then-write with no transaction, so two
+    // receptionists admitting to the same bed within the same race window
+    // could both succeed (see UAT_SECURITY_REPORT.md §4).
+    match /bedLocks/{lockId} {
+      // Public get, same reasoning doctorSlots/phoneDailyCounts already use
+      // above: admitPatient()'s transaction must transaction.get() this doc
+      // to see whether a bed is free *before* it necessarily exists (the
+      // very first admission to any given bed), and resource.data on a
+      // not-yet-existing doc can't be safely referenced for an ownership
+      // check (see the /invoices get-rule comment for why that specific
+      // trap turns a legitimate caller's read into a hard permission-denied
+      // instead of a clean "doesn't exist yet"). The doc holds no patient
+      // data, only an opaque admission id — low sensitivity, consistent
+      // with why those other two are public too.
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isSuperAdmin() ||
+        (isHospitalStaffOf(request.resource.data.hospitalId) &&
+         hasModuleAccess(request.resource.data.hospitalId, 'bedManagement'));
+      allow delete: if isSuperAdmin();
+    }
+
+    // Append-only activity feed for sensitive staff actions (invoice
+    // voided, staff deactivated/reactivated, permissions changed, staff
+    // created, appointment cancelled — see src/firebase/activityLog.js for
+    // exactly what writes an entry). Any active staff member may create an
+    // entry for their own hospital (recording their own action — there is
+    // nothing to gain by writing a false one, and every write path in the
+    // app that calls this always also performs the real action under its
+    // own, separately-enforced rule); Super Admin may create one for any
+    // hospital too (e.g. creating that hospital's first Hospital Admin —
+    // isHospitalStaffOf alone would exclude Super Admin, since their own
+    // hospitalId is null). Entries are permanently immutable once written
+    // (no update, no delete, not even for Super Admin — an audit log that
+    // can be edited after the fact isn't one) and only visible to that
+    // hospital's own admin or the Super Admin, not to Doctors/Receptionists.
+    match /activityLog/{entryId} {
+      allow get, list: if isSuperAdmin() || isHospitalAdminOf(resource.data.hospitalId);
+      allow create: if isSuperAdmin() || isHospitalStaffOf(request.resource.data.hospitalId);
+      allow update, delete: if false;
     }
 
     // Prescriptions module (src/config/featureRegistry.js key

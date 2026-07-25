@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { updateDoctorProfile } from '../../firebase/users'
 import { useAuth } from '../../contexts/AuthContext'
 import { renderMarkdown } from '../../utils/renderMarkdown'
+import { validators } from '../../utils/validations'
+import { useFormValidation } from '../../hooks/useFormValidation'
 import NavIcon from '../../components/common/NavIcon'
 
 const MD_BUTTONS = [
@@ -30,11 +32,15 @@ function DoctorProfileEditor() {
   const [consultationFee, setConsultationFee] = useState(userDoc?.consultationFee ?? '')
   const [languages, setLanguages] = useState((userDoc?.languages || []).join(', '))
   const [credentials, setCredentials] = useState(userDoc?.credentials || [])
+  const [photoUrl, setPhotoUrl] = useState(userDoc?.photoUrl || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [editorTab, setEditorTab] = useState('write') // 'write' | 'preview'
   const [sectionTab, setSectionTab] = useState('basic') // 'basic' | 'about' | 'credentials'
+  const { errors, validate, clearFieldError } = useFormValidation({
+    photoUrl: [validators.url('Enter a valid image URL (http/https).')],
+  })
 
   function insertMarkdown(btn) {
     const ta = textareaRef.current
@@ -73,17 +79,19 @@ function DoctorProfileEditor() {
   }
 
   async function handleSave() {
-    setSaving(true)
     setError('')
     setSaved(false)
+    if (!validate({ photoUrl })) return
+    setSaving(true)
     try {
       await updateDoctorProfile(user.uid, {
         displayName,
         specialization,
         department,
         about,
-        yearsOfExperience: yearsOfExperience !== '' ? Number(yearsOfExperience) : null,
-        consultationFee: consultationFee !== '' ? Number(consultationFee) : null,
+        photoUrl: photoUrl.trim(),
+        yearsOfExperience: yearsOfExperience !== '' ? Math.max(0, Number(yearsOfExperience)) : null,
+        consultationFee: consultationFee !== '' ? Math.max(0, Number(consultationFee)) : null,
         languages: languages
           .split(',')
           .map((l) => l.trim())
@@ -203,6 +211,31 @@ function DoctorProfileEditor() {
                   placeholder="English, Hindi, Marathi"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>Photo URL</label>
+              <div className="mt-1 flex items-center gap-3">
+                {photoUrl && !errors.photoUrl ? (
+                  <img src={photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-line" />
+                ) : (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-card-strong text-xs font-bold text-faint">
+                    {(displayName || '?')[0]?.toUpperCase()}
+                  </span>
+                )}
+                <input
+                  type="url"
+                  value={photoUrl}
+                  onChange={(e) => { setPhotoUrl(e.target.value); clearFieldError('photoUrl') }}
+                  className={inputCls}
+                  placeholder="https://example.com/your-photo.jpg"
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-faint">
+                Shown on your public profile and the hospital's doctor listing instead of your initials. Leave blank to
+                keep the initials.
+              </p>
+              {errors.photoUrl && <p className="mt-1 text-xs text-red-500">{errors.photoUrl}</p>}
             </div>
           </div>
         </div>

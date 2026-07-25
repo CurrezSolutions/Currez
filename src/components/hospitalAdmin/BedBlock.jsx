@@ -9,14 +9,11 @@ const STYLES = {
     'bg-red-500/8 border-red-500/25 text-red-500 hover:border-red-500/45 cursor-pointer',
   maintenance:
     'bg-slate-500/8 border-slate-500/25 text-slate-400 dark:text-slate-500 cursor-not-allowed',
-  selected:
-    'bg-indigo-500/10 border-indigo-500/50 text-indigo-500 ring-2 ring-indigo-500/30 cursor-pointer',
 }
 
-function BedBlock({ bed, admission, isSelected, onSelect, canManage, onToggleMaintenance, onTransferRequest }) {
+function BedBlock({ bed, admission, onSelect, canManage, onToggleMaintenance, onTransferRequest }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const rawStatus = getBedDisplayStatus(bed, admission)
-  const status = isSelected ? 'selected' : rawStatus
 
   const days = admission ? computeDaysSince(admission.admittedAt) : 0
   const charges = admission ? computeRunningCharges(admission.dailyRate, admission.admittedAt) : 0
@@ -30,7 +27,7 @@ function BedBlock({ bed, admission, isSelected, onSelect, canManage, onToggleMai
         type="button"
         disabled={!clickable}
         onClick={() => clickable && onSelect?.(bed, admission)}
-        className={`flex w-full min-w-28 flex-col items-center gap-1.5 rounded-2xl border p-3 transition-all duration-200 ${STYLES[status]} ${!clickable ? 'opacity-70' : ''}`}
+        className={`flex w-full min-w-28 flex-col items-center gap-1.5 rounded-2xl border p-3 transition-all duration-200 ${STYLES[rawStatus]} ${!clickable ? 'opacity-70' : ''}`}
       >
         <BedIcon status={rawStatus} className="h-7 w-7" />
 

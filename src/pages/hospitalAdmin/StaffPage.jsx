@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { setUserStatus, setUserBillingAccess } from "../../firebase/users";
 import { resetPassword } from "../../firebase/auth";
+import { logActivity } from "../../firebase/activityLog";
 import { useFeature } from "../../hooks/useFeature";
+import { useAuth } from "../../contexts/AuthContext";
 import { useHospitalData } from "../../contexts/HospitalDataContext";
 import {
   CREATABLE_STAFF_ROLES_BY_HOSPITAL_ADMIN,
@@ -19,6 +21,7 @@ import Pagination from "../../components/common/Pagination";
 
 function StaffPage({ tenantSlug }) {
   const { enabled: billingEnabled } = useFeature("billing");
+  const { user } = useAuth();
   const { staff } = useHospitalData();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCredentials, setNewCredentials] = useState(null);
@@ -48,8 +51,32 @@ function StaffPage({ tenantSlug }) {
       executeResetPassword(member);
     } else if (type === "deactivate" || type === "reactivate") {
       setUserStatus(member.uid, type === "deactivate" ? "disabled" : "active");
+      logActivity({
+        hospitalId: tenantSlug,
+        action: type === "deactivate" ? "staff.deactivated" : "staff.reactivated",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        targetType: "user",
+        targetId: member.uid,
+        targetLabel: member.displayName || member.email,
+      });
     }
     setConfirmAction(null);
+  }
+
+  function handleBillingAccessToggle(member) {
+    const currentlyOff = member.billingAccess === false;
+    setUserBillingAccess(member.uid, currentlyOff);
+    logActivity({
+      hospitalId: tenantSlug,
+      action: "staff.billing_access_changed",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      targetType: "user",
+      targetId: member.uid,
+      targetLabel: member.displayName || member.email,
+      details: currentlyOff ? "Billing access turned on" : "Billing access turned off",
+    });
   }
 
   const allStaff = staff.filter(
@@ -85,10 +112,7 @@ function StaffPage({ tenantSlug }) {
         </button>
         {billingEnabled && member.role === ROLES.RECEPTIONIST && (
           <button
-            onClick={() => {
-              const currentlyOff = member.billingAccess === false;
-              setUserBillingAccess(member.uid, currentlyOff);
-            }}
+            onClick={() => handleBillingAccessToggle(member)}
             title={
               member.billingAccess === false
                 ? "This receptionist cannot create invoices or record payments"

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createStaffAuthAccount } from '../../firebase/secondaryAuth'
 import { createUserDoc } from '../../firebase/users'
+import { logActivity } from '../../firebase/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
 import { CREATABLE_STAFF_ROLES, ROLES, ROLE_LABELS } from '../../utils/roles'
 import { validators } from '../../utils/validations'
@@ -28,7 +29,7 @@ function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCr
   const { errors, validate, clearFieldError } = useFormValidation({
     displayName: [validators.required('Display name is required.')],
     email: [validators.required('Email is required.'), validators.email('Enter a valid email address.')],
-    password: [validators.required('Password is required.'), validators.minLength(6, 'Password must be at least 6 characters.')],
+    password: [validators.required('Password is required.'), validators.minLength(10, 'Password must be at least 10 characters.')],
     specialization: role === ROLES.DOCTOR ? [validators.required('Specialization is required for doctors.')] : [],
   })
 
@@ -49,6 +50,15 @@ function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCr
         ...(role === ROLES.DOCTOR
           ? { specialization: specialization.trim(), schedule: DEFAULT_SCHEDULE }
           : {}),
+      })
+      logActivity({
+        hospitalId,
+        action: 'staff.created',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        targetType: 'user',
+        targetId: uid,
+        targetLabel: `${displayName.trim() || trimmedEmail} (${ROLE_LABELS[role]})`,
       })
       onCreated({ email: trimmedEmail, password })
     } catch (err) {

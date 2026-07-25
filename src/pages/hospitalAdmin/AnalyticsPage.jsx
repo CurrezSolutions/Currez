@@ -666,8 +666,11 @@ function AnalyticsPage() {
 
   const dailyAppts = useMemo(() => buildDailyCounts(stats.rangeAppts, days), [stats.rangeAppts, days])
   const dailyRevenue = useMemo(() => buildRevenueByDay(stats.rangeInvoices, days), [stats.rangeInvoices, days])
-  const doctorStats = useMemo(() => buildDoctorStats(appointments, staff), [appointments, staff])
-  const peakHours = useMemo(() => buildPeakHours(appointments), [appointments])
+  // Both used to compute from the full, unfiltered `appointments` list —
+  // switching the range selector silently had no effect on either section,
+  // unlike every other card on this page. Now consistent with the rest.
+  const doctorStats = useMemo(() => buildDoctorStats(stats.rangeAppts, staff), [stats.rangeAppts, staff])
+  const peakHours = useMemo(() => buildPeakHours(stats.rangeAppts), [stats.rangeAppts])
   const deptStats = useMemo(() => buildDepartmentStats(stats.rangeAppts), [stats.rangeAppts])
 
   if (hospital === undefined || invoices === null) return <PageSpinner />

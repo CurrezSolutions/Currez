@@ -146,6 +146,22 @@ export const FEATURE_REGISTRY = [
     isCore: false,
     defaultEnabled: false,
   },
+  {
+    key: 'activityLog',
+    label: 'Activity Log',
+    description: 'Who voided an invoice, deactivated a staff member, changed permissions or cancelled an appointment, and when.',
+    icon: 'clipboard',
+    path: 'activity-log',
+    allowedRoles: [ROLES.HOSPITAL_ADMIN],
+    category: FEATURE_CATEGORIES.CORE,
+    // Always on, same as Staff — an oversight/security baseline every
+    // hospital should have, not a paid module a Super Admin opts hospitals
+    // into. Doctors/Receptionists never see it (matches firestore.rules'
+    // /activityLog read rule, and Staff's own precedent of not needing a
+    // RequirePermission override — nothing to narrow further below
+    // Hospital-Admin-only).
+    isCore: true,
+  },
 ]
 
 export function getFeatureDefinition(key) {

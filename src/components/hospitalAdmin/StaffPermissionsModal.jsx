@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import Modal from '../common/Modal'
 import { setUserModulePermission } from '../../firebase/users'
+import { logActivity } from '../../firebase/activityLog'
+import { useAuth } from '../../contexts/AuthContext'
 import { PERMISSION_MODULES, PERMISSION_LEVELS, PERMISSION_LEVEL_LABELS, getModulePermission } from '../../utils/permissions'
 import { ROLE_LABELS } from '../../utils/roles'
 import StatusBadge from '../superadmin/StatusBadge'
 
 function StaffPermissionsModal({ member, onClose }) {
+  const { user } = useAuth()
   const [permissions, setPermissions] = useState(() => {
     const initial = {}
     for (const mod of PERMISSION_MODULES) {
@@ -26,10 +29,23 @@ function StaffPermissionsModal({ member, onClose }) {
     setSaving(true)
     setError('')
     try {
+      const changed = PERMISSION_MODULES.filter((mod) => permissions[mod.key] !== getModulePermission(member, mod.key))
       const promises = PERMISSION_MODULES.map((mod) =>
         setUserModulePermission(member.uid, mod.key, permissions[mod.key])
       )
       await Promise.all(promises)
+      if (changed.length > 0) {
+        logActivity({
+          hospitalId: member.hospitalId,
+          action: 'staff.permissions_changed',
+          actorUid: user.uid,
+          actorEmail: user.email,
+          targetType: 'user',
+          targetId: member.uid,
+          targetLabel: member.displayName || member.email,
+          details: changed.map((mod) => `${mod.label}: ${permissions[mod.key]}`).join(', '),
+        })
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {

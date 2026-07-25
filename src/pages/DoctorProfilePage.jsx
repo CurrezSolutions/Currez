@@ -141,14 +141,22 @@ function DoctorProfilePage() {
         <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center gap-8 sm:flex-row sm:items-start">
           {/* avatar */}
           <div className="shrink-0">
-            <span
-              className="flex h-28 w-28 items-center justify-center rounded-2xl text-3xl font-extrabold text-white shadow-xl"
-              style={{
-                background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 55%, black))`,
-              }}
-            >
-              {initials(doctor.displayName)}
-            </span>
+            {doctor.photoUrl ? (
+              <img
+                src={doctor.photoUrl}
+                alt={doctor.displayName}
+                className="h-28 w-28 rounded-2xl object-cover shadow-xl ring-1 ring-white/20"
+              />
+            ) : (
+              <span
+                className="flex h-28 w-28 items-center justify-center rounded-2xl text-3xl font-extrabold text-white shadow-xl"
+                style={{
+                  background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 55%, black))`,
+                }}
+              >
+                {initials(doctor.displayName)}
+              </span>
+            )}
           </div>
 
           {/* info */}

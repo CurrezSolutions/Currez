@@ -3,8 +3,12 @@ import { Link, useParams } from 'react-router-dom'
 import { subscribeHospital, updateHospital } from '../../firebase/hospitals'
 import { subscribeUsersByHospital, setUserStatus } from '../../firebase/users'
 import { subscribeToHospitalFeatures } from '../../firebase/hospitalFeatures'
+import { subscribeAppointments } from '../../firebase/appointments'
 import { resetPassword } from '../../firebase/auth'
+import { logActivity } from '../../firebase/activityLog'
+import { useAuth } from '../../contexts/AuthContext'
 import { ROLE_LABELS } from '../../utils/roles'
+import { todayDateString } from '../../utils/dates'
 import { CONTENT_SECTIONS } from '../../utils/hospitalContentSchema'
 import HospitalFormPage from './HospitalFormPage'
 import ContentSectionEditor from '../../components/superadmin/ContentSectionEditor'
@@ -13,6 +17,7 @@ import StaffFormModal from '../../components/superadmin/StaffFormModal'
 import CredentialsDialog from '../../components/superadmin/CredentialsDialog'
 import StatCard from '../../components/superadmin/StatCard'
 import StatusBadge from '../../components/superadmin/StatusBadge'
+import ConfirmModal from '../../components/common/ConfirmModal'
 import { PageSpinner } from '../../components/common/Spinner'
 import NavIcon from '../../components/common/NavIcon'
 import Pagination from '../../components/common/Pagination'
@@ -28,6 +33,7 @@ const TABS = [
 
 function HospitalDetailPage() {
   const { slug } = useParams()
+  const { user } = useAuth()
   const [hospital, setHospital] = useState(undefined)
   const [staff, setStaff] = useState([])
   const [features, setFeatures] = useState(undefined)
@@ -37,6 +43,8 @@ function HospitalDetailPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [resetSentFor, setResetSentFor] = useState(null)
   const [staffPage, setStaffPage] = useState(1)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [appointments, setAppointments] = useState(undefined)
 
   const STAFF_PAGE_SIZE = 10
 
@@ -49,13 +57,20 @@ function HospitalDetailPage() {
     if (activeTab !== 'features') return
     return subscribeToHospitalFeatures(slug, setFeatures)
   }, [slug, activeTab])
+  // Same reasoning, for Overview's stat cards — these used to be hardcoded
+  // to 0 regardless of real data; only fetch when that tab is actually open.
+  useEffect(() => {
+    if (activeTab !== 'overview') return
+    return subscribeAppointments(slug, setAppointments)
+  }, [slug, activeTab])
   useEffect(() => setActiveTab('overview'), [slug])
   useEffect(() => setFeatures(undefined), [slug])
+  useEffect(() => setAppointments(undefined), [slug])
 
   if (hospital === undefined) return <PageSpinner />
   if (hospital === null) return <TenantNotFound slug={slug} />
 
-  async function handleResetPassword(member) {
+  async function executeResetPassword(member) {
     setResetSentFor(null)
     try {
       await resetPassword(member.email)
@@ -63,6 +78,26 @@ function HospitalDetailPage() {
       setResetSentFor(member.uid)
       setTimeout(() => setResetSentFor(null), 4000)
     }
+  }
+
+  function handleConfirmAction() {
+    if (!confirmAction) return
+    const { type, member } = confirmAction
+    if (type === 'resetPassword') {
+      executeResetPassword(member)
+    } else if (type === 'deactivate' || type === 'reactivate') {
+      setUserStatus(member.uid, type === 'deactivate' ? 'disabled' : 'active')
+      logActivity({
+        hospitalId: slug,
+        action: type === 'deactivate' ? 'staff.deactivated' : 'staff.reactivated',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        targetType: 'user',
+        targetId: member.uid,
+        targetLabel: member.displayName || member.email,
+      })
+    }
+    setConfirmAction(null)
   }
 
   async function toggleStatus() {
@@ -128,8 +163,18 @@ function HospitalDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-heading">Activity</h2>
             <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <StatCard label="Appointments today" value={0} hint="No appointment data yet" icon="appointments" />
-              <StatCard label="Total appointments" value={0} hint="No appointment data yet" icon="appointments" />
+              <StatCard
+                label="Appointments today"
+                value={appointments === undefined ? '—' : appointments.filter((a) => a.date === todayDateString()).length}
+                hint={appointments === undefined ? 'Loading…' : undefined}
+                icon="appointments"
+              />
+              <StatCard
+                label="Total appointments"
+                value={appointments === undefined ? '—' : appointments.length}
+                hint={appointments === undefined ? 'Loading…' : undefined}
+                icon="appointments"
+              />
               <StatCard
                 label="Active staff"
                 value={staff.filter((s) => s.status === 'active').length}
@@ -212,13 +257,13 @@ function HospitalDetailPage() {
                       View profile
                     </Link>
                     <button
-                      onClick={() => handleResetPassword(member)}
+                      onClick={() => setConfirmAction({ type: 'resetPassword', member })}
                       className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-card-strong hover:text-heading"
                     >
                       {resetSentFor === member.uid ? 'Sent' : 'Reset password'}
                     </button>
                     <button
-                      onClick={() => setUserStatus(member.uid, member.status === 'active' ? 'disabled' : 'active')}
+                      onClick={() => setConfirmAction({ type: member.status === 'active' ? 'deactivate' : 'reactivate', member })}
                       className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                         member.status === 'active'
                           ? 'text-red-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400'
@@ -292,14 +337,14 @@ function HospitalDetailPage() {
                             View profile
                           </Link>
                           <button
-                            onClick={() => handleResetPassword(member)}
+                            onClick={() => setConfirmAction({ type: 'resetPassword', member })}
                             className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-card-strong hover:text-heading"
                           >
                             {resetSentFor === member.uid ? 'Sent' : 'Reset password'}
                           </button>
                           <button
                             onClick={() =>
-                              setUserStatus(member.uid, member.status === 'active' ? 'disabled' : 'active')
+                              setConfirmAction({ type: member.status === 'active' ? 'deactivate' : 'reactivate', member })
                             }
                             className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                               member.status === 'active'
@@ -348,6 +393,35 @@ function HospitalDetailPage() {
           email={newCredentials.email}
           password={newCredentials.password}
           onClose={() => setNewCredentials(null)}
+        />
+      )}
+
+      {confirmAction && (
+        <ConfirmModal
+          title={
+            confirmAction.type === 'deactivate'
+              ? 'Deactivate staff member?'
+              : confirmAction.type === 'reactivate'
+              ? 'Reactivate staff member?'
+              : 'Reset password?'
+          }
+          message={
+            confirmAction.type === 'deactivate'
+              ? `${confirmAction.member.displayName} will lose access to the dashboard. You can reactivate them later.`
+              : confirmAction.type === 'reactivate'
+              ? `${confirmAction.member.displayName} will regain access to the dashboard.`
+              : `A password reset email will be sent to ${confirmAction.member.email}.`
+          }
+          confirmLabel={
+            confirmAction.type === 'deactivate'
+              ? 'Deactivate'
+              : confirmAction.type === 'reactivate'
+              ? 'Reactivate'
+              : 'Send reset email'
+          }
+          danger={confirmAction.type === 'deactivate'}
+          onConfirm={handleConfirmAction}
+          onCancel={() => setConfirmAction(null)}
         />
       )}
     </div>

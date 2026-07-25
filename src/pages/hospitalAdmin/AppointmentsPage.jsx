@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { updateAppointmentStatus } from '../../firebase/appointments'
+import { logActivity } from '../../firebase/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
 import { useHospitalData } from '../../contexts/HospitalDataContext'
 import { ROLES } from '../../utils/roles'
@@ -11,6 +12,7 @@ import BookAppointmentModal from '../../components/hospitalAdmin/BookAppointment
 import ConfirmPaymentModal from '../../components/hospitalAdmin/ConfirmPaymentModal'
 import CompleteVisitModal from '../../components/hospitalAdmin/CompleteVisitModal'
 import RescheduleAppointmentModal from '../../components/hospitalAdmin/RescheduleAppointmentModal'
+import ConfirmModal from '../../components/common/ConfirmModal'
 import NavIcon from '../../components/common/NavIcon'
 import Pagination from '../../components/common/Pagination'
 
@@ -64,8 +66,30 @@ function AppointmentsPage({ tenantSlug }) {
   const [completingAppt, setCompletingAppt] = useState(null)
   const [viewingAppt, setViewingAppt] = useState(null)
   const [reschedulingAppt, setReschedulingAppt] = useState(null)
+  const [cancellingAppt, setCancellingAppt] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
 
   const PAGE_SIZE = 10
+
+  async function handleCancelConfirmed() {
+    if (!cancellingAppt) return
+    setCancelling(true)
+    try {
+      await updateAppointmentStatus(cancellingAppt.id, 'cancelled')
+      logActivity({
+        hospitalId: tenantSlug,
+        action: 'appointment.cancelled',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        targetType: 'appointment',
+        targetId: cancellingAppt.id,
+        targetLabel: `${cancellingAppt.patientName || 'Unknown'} — ${cancellingAppt.date} ${cancellingAppt.time || ''}`.trim(),
+      })
+      setCancellingAppt(null)
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   // The shared context holds a much wider window (365 days back, unbounded
   // forward) than this page needs — narrow it to the ±7 day operational
@@ -156,7 +180,7 @@ function AppointmentsPage({ tenantSlug }) {
               Complete
             </button>
             <button
-              onClick={() => updateAppointmentStatus(appt.id, 'cancelled')}
+              onClick={() => setCancellingAppt(appt)}
               className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
             >
               Cancel
@@ -395,6 +419,18 @@ function AppointmentsPage({ tenantSlug }) {
 
       {viewingAppt && (
         <CompleteVisitModal appointment={viewingAppt} readOnly onClose={() => setViewingAppt(null)} />
+      )}
+
+      {cancellingAppt && (
+        <ConfirmModal
+          title="Cancel this appointment?"
+          message={`This frees up ${cancellingAppt.doctorName ? `${cancellingAppt.doctorName}'s` : 'the'} ${cancellingAppt.time || ''} slot on ${cancellingAppt.date} for ${cancellingAppt.patientName || 'this patient'}. This can't be undone from here — they'd need to book again.`}
+          confirmLabel="Cancel appointment"
+          danger
+          busy={cancelling}
+          onConfirm={handleCancelConfirmed}
+          onCancel={() => setCancellingAppt(null)}
+        />
       )}
     </div>
   )

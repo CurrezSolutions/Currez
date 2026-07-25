@@ -21,6 +21,11 @@ function TestimonialsSection({ data }) {
           // there's enough content to justify the asymmetry — with only
           // one or two items an oversized lone card would look like a bug.
           const featured = i === 0 && items.length >= 3
+          // Clamp defensively at the render boundary — String.repeat throws
+          // on a negative count, and a rating > 5 would make the "empty
+          // stars" count negative too. Protects against bad data regardless
+          // of how it got saved (this is the actual crash site).
+          const rating = Math.min(5, Math.max(0, Math.round(Number(item.rating) || 5)))
           return (
             <Reveal
               key={item.name}
@@ -37,8 +42,8 @@ function TestimonialsSection({ data }) {
                 &rdquo;
               </span>
               <p className="relative text-sm tracking-wide" style={{ color: 'var(--tenant-primary)' }}>
-                {'★'.repeat(item.rating ?? 5)}
-                <span className="text-line-strong">{'★'.repeat(5 - (item.rating ?? 5))}</span>
+                {'★'.repeat(rating)}
+                <span className="text-line-strong">{'★'.repeat(5 - rating)}</span>
               </p>
               <p className={`relative mt-3 text-body ${featured ? 'text-xl font-medium text-heading md:text-2xl' : 'text-sm'}`}>
                 &ldquo;{item.message}&rdquo;

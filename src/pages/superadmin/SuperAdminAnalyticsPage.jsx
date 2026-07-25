@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { subscribeHospitals, getHospitalCounts } from '../../firebase/hospitals'
 import { getStaffCount } from '../../firebase/users'
+import { ROLES, ROLE_LABELS } from '../../utils/roles'
 import { todayDateString, shiftDateString } from '../../utils/dates'
 import { PageSpinner } from '../../components/common/Spinner'
 import NavIcon from '../../components/common/NavIcon'
@@ -362,6 +363,99 @@ function AppointmentsModal({ appointments, onClose, initialStatus }) {
   )
 }
 
+function StaffModal({ staff, hospitalsBySlug, onClose }) {
+  const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const MODAL_PAGE_SIZE = 20
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return staff
+    return staff.filter(
+      (s) =>
+        s.displayName?.toLowerCase().includes(q) ||
+        s.email?.toLowerCase().includes(q) ||
+        (hospitalsBySlug[s.hospitalId]?.title || s.hospitalId || '').toLowerCase().includes(q)
+    )
+  }, [staff, search, hospitalsBySlug])
+
+  const paginatedFiltered = useMemo(
+    () => filtered.slice((currentPage - 1) * MODAL_PAGE_SIZE, currentPage * MODAL_PAGE_SIZE),
+    [filtered, currentPage]
+  )
+
+  const handleExport = () => {
+    const headers = ['Name', 'Email', 'Role', 'Hospital', 'Status']
+    const rows = filtered.map((s) => [
+      s.displayName || '', s.email || '', ROLE_LABELS[s.role] || s.role,
+      hospitalsBySlug[s.hospitalId]?.title || s.hospitalId || '', s.status || '',
+    ])
+    exportToCSV(headers, rows, `platform-staff-${todayDateString()}`)
+  }
+
+  return (
+    <Modal onClose={onClose} className="max-w-3xl">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-heading">All Staff</h2>
+        <p className="mt-1 text-sm text-muted">{filtered.length} staff member{filtered.length !== 1 ? 's' : ''} across every hospital</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          type="text"
+          placeholder="Search by name, email, hospital..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 min-w-[200px] rounded-xl border border-line bg-card px-4 py-2.5 text-sm text-heading placeholder:text-faint focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+        />
+        <button
+          onClick={handleExport}
+          className="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-line bg-card px-4 py-2.5 text-sm font-medium text-heading transition-all hover:bg-card-strong hover:border-indigo-500/30 active:scale-[0.98]"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Export CSV
+        </button>
+      </div>
+
+      <div className="max-h-[55vh] overflow-y-auto -mx-2 px-2">
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted">No staff found</div>
+        ) : (
+          <div className="space-y-2">
+            {paginatedFiltered.map((s) => (
+              <div key={s.uid} className="flex items-center gap-3 rounded-xl border border-line/50 bg-card-strong/30 px-4 py-3 transition-colors hover:bg-card-strong/60">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs font-bold text-violet-600 ring-1 ring-violet-500/20 ring-inset dark:text-violet-300">
+                  {(s.displayName || '?')[0].toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-heading truncate">{s.displayName || s.email}</p>
+                    <StatusBadge status={s.status} kind="user" />
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                    <span className="font-medium text-indigo-600 dark:text-indigo-300">{hospitalsBySlug[s.hospitalId]?.title || s.hospitalId}</span>
+                    <span>{ROLE_LABELS[s.role] || s.role}</span>
+                    {s.email && <span className="text-faint">{s.email}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="pt-2">
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filtered.length}
+                pageSize={MODAL_PAGE_SIZE}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 function RevenueModal({ invoices, onClose }) {
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -484,6 +578,7 @@ function PlatformAnalytics() {
   const [hospitals, setHospitals] = useState(null)
   const [counts, setCounts] = useState(null)
   const [staffCount, setStaffCount] = useState(null)
+  const [staff, setStaff] = useState(null)
   const [appointments, setAppointments] = useState(null)
   const [invoices, setInvoices] = useState(null)
   const [range, setRange] = useState('30')
@@ -493,8 +588,19 @@ function PlatformAnalytics() {
     const unsubHospitals = subscribeHospitals(setHospitals)
     getHospitalCounts().then(setCounts)
     getStaffCount().then(setStaffCount)
-    return unsubHospitals
+    // Live listener (not a one-off count) so the Total Staff drill-down
+    // modal has actual rows to show, not just the number.
+    const unsubStaff = onSnapshot(
+      query(collection(db, 'users'), where('role', '!=', ROLES.SUPERADMIN)),
+      (snap) => setStaff(snap.docs.map((d) => ({ uid: d.id, ...d.data() })))
+    )
+    return () => { unsubHospitals(); unsubStaff() }
   }, [])
+
+  const hospitalsBySlug = useMemo(
+    () => Object.fromEntries((hospitals || []).map((h) => [h.slug, h])),
+    [hospitals]
+  )
 
   const days = getRangeDays(range)
 
@@ -625,7 +731,7 @@ function PlatformAnalytics() {
           hint="Across every hospital"
           icon="staff"
           color="from-violet-500/15 to-violet-500/5"
-          onClick={() => {}}
+          onClick={() => setModal({ type: 'staff' })}
         />
       </div>
 
@@ -728,6 +834,9 @@ function PlatformAnalytics() {
       )}
       {modal?.type === 'revenue' && (
         <RevenueModal invoices={invoices || []} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'staff' && (
+        <StaffModal staff={staff || []} hospitalsBySlug={hospitalsBySlug} onClose={() => setModal(null)} />
       )}
     </div>
   )

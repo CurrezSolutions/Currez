@@ -21,6 +21,7 @@ import AdmitPatientModal from '../../components/hospitalAdmin/AdmitPatientModal'
 import DischargeModal from '../../components/hospitalAdmin/DischargeModal'
 import TransferBedModal from '../../components/hospitalAdmin/TransferBedModal'
 import BedConfigBuilder from '../../components/hospitalAdmin/BedConfigBuilder'
+import AdmissionHistoryPanel from '../../components/hospitalAdmin/AdmissionHistoryPanel'
 import { PageSpinner } from '../../components/common/Spinner'
 
 function BedManagementPage({ tenantSlug }) {
@@ -33,7 +34,7 @@ function BedManagementPage({ tenantSlug }) {
   const [activeAdmissions, setActiveAdmissions] = useState(null)
   const [selectedFloorId, setSelectedFloorId] = useState(null)
   const [wardFilter, setWardFilter] = useState(null)
-  const [view, setView] = useState('grid') // 'grid' | 'configure'
+  const [view, setView] = useState('grid') // 'grid' | 'configure' | 'history'
   const [admitModal, setAdmitModal] = useState(null)
   const [dischargeModal, setDischargeModal] = useState(null)
   const [transferModal, setTransferModal] = useState(null)
@@ -154,6 +155,10 @@ function BedManagementPage({ tenantSlug }) {
     )
   }
 
+  if (view === 'history') {
+    return <AdmissionHistoryPanel hospitalId={tenantSlug} onClose={() => setView('grid')} />
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -162,14 +167,22 @@ function BedManagementPage({ tenantSlug }) {
           <h1 className="text-2xl font-bold text-heading">Beds &amp; Wards</h1>
           <p className="mt-0.5 text-sm text-muted">Manage hospital beds, admissions and occupancy</p>
         </div>
-        {isAdmin && (
+        <div className="flex gap-2">
           <button
-            onClick={() => setView('configure')}
+            onClick={() => setView('history')}
             className="self-start rounded-xl border border-line bg-card px-4 py-2 text-sm font-medium text-heading transition-colors hover:bg-card-strong"
           >
-            Configure Beds
+            Admission History
           </button>
-        )}
+          {isAdmin && (
+            <button
+              onClick={() => setView('configure')}
+              className="self-start rounded-xl border border-line bg-card px-4 py-2 text-sm font-medium text-heading transition-colors hover:bg-card-strong"
+            >
+              Configure Beds
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main layout: sidebar + grid */}

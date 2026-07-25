@@ -445,7 +445,7 @@ function BedTypesEditor({ bedTypes, onAdd, onUpdate, onRemove }) {
             <input
               type="number"
               value={bt.ratePerDay}
-              onChange={(e) => onUpdate(key, { ratePerDay: Number(e.target.value) || 0 })}
+              onChange={(e) => onUpdate(key, { ratePerDay: Math.max(0, Number(e.target.value) || 0) })}
               className="w-14 bg-transparent text-sm text-heading outline-none"
               min="0"
             />

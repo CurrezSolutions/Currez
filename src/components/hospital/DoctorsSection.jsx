@@ -29,14 +29,22 @@ function DoctorsSection({ doctors, slug }) {
                 to={`/doctor/${doctor.uid}?tenant=${slug}`}
                 className="group block rounded-2xl border border-line bg-card p-7 text-center transition-all duration-300 hover:-translate-y-1.5 hover:border-line-strong hover:shadow-lg"
               >
-                <span
-                  className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white shadow-sm transition-transform duration-300 group-hover:scale-105"
-                  style={{
-                    background: 'linear-gradient(135deg, var(--tenant-primary), color-mix(in srgb, var(--tenant-primary) 60%, black))',
-                  }}
-                >
-                  {initials(doctor.displayName)}
-                </span>
+                {doctor.photoUrl ? (
+                  <img
+                    src={doctor.photoUrl}
+                    alt={doctor.displayName}
+                    className="mx-auto h-16 w-16 rounded-full object-cover shadow-sm transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <span
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white shadow-sm transition-transform duration-300 group-hover:scale-105"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--tenant-primary), color-mix(in srgb, var(--tenant-primary) 60%, black))',
+                    }}
+                  >
+                    {initials(doctor.displayName)}
+                  </span>
+                )}
                 <h3 className="mt-4 font-semibold text-heading">{doctor.displayName}</h3>
                 {doctor.specialization && <p className="mt-1 text-sm text-body">{doctor.specialization}</p>}
                 <span

@@ -64,7 +64,14 @@ function ContentSectionEditor({ slug, sectionKey, label, fields, section, noItem
             ? []
             : items.map((item) =>
                 fields.reduce((acc, f) => {
-                  acc[f.name] = f.type === 'number' ? Number(item[f.name]) || 0 : item[f.name] || ''
+                  if (f.type !== 'number') {
+                    acc[f.name] = item[f.name] || ''
+                    return acc
+                  }
+                  let n = Number(item[f.name]) || 0
+                  if (f.min != null) n = Math.max(f.min, n)
+                  if (f.max != null) n = Math.min(f.max, n)
+                  acc[f.name] = n
                   return acc
                 }, {})
               ),
@@ -130,6 +137,8 @@ function ContentSectionEditor({ slug, sectionKey, label, fields, section, noItem
                       <label className="block text-xs font-medium text-muted">{f.label}</label>
                       <input
                         type={f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text'}
+                        min={f.min}
+                        max={f.max}
                         value={item[f.name] ?? ''}
                         onChange={(e) => updateItem(index, f.name, e.target.value)}
                         className={inputClass}
