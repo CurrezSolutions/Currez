@@ -457,7 +457,7 @@ function CompanyLandingPage() {
             <div className="aspect-video w-full">
               <iframe
                 className="h-full w-full rounded-2xl"
-                src="https://www.youtube.com/embed/4Y2aYwdqTPY?si=khES7NvGQMl6J5HN"
+                src="https://www.youtube-nocookie.com/embed/4Y2aYwdqTPY?rel=0&modestbranding=1"
                 title="Currez Hospital Management System Demo"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
