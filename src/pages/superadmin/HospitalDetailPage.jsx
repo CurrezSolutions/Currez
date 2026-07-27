@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { subscribeHospital, updateHospital } from '../../firebase/hospitals'
 import { subscribeUsersByHospital, setUserStatus } from '../../firebase/users'
 import { subscribeToHospitalFeatures } from '../../firebase/hospitalFeatures'
+import { subscribeToHospitalLimits } from '../../firebase/hospitalLimits'
 import { subscribeAppointments } from '../../firebase/appointments'
 import { resetPassword } from '../../firebase/auth'
 import { logActivity } from '../../firebase/activityLog'
@@ -13,6 +14,8 @@ import { CONTENT_SECTIONS } from '../../utils/hospitalContentSchema'
 import HospitalFormPage from './HospitalFormPage'
 import ContentSectionEditor from '../../components/superadmin/ContentSectionEditor'
 import FeatureManagementPanel from '../../components/superadmin/FeatureManagementPanel'
+import LimitsManagementPanel from '../../components/superadmin/LimitsManagementPanel'
+import HospitalActivityLogPanel from '../../components/superadmin/HospitalActivityLogPanel'
 import StaffFormModal from '../../components/superadmin/StaffFormModal'
 import CredentialsDialog from '../../components/superadmin/CredentialsDialog'
 import StatCard from '../../components/superadmin/StatCard'
@@ -28,7 +31,9 @@ const TABS = [
   { key: 'branding', label: 'Branding & Contact', icon: 'profile' },
   { key: 'content', label: 'Content', icon: 'clipboard' },
   { key: 'features', label: 'Modules', icon: 'dashboard' },
+  { key: 'limits', label: 'Limits', icon: 'lock' },
   { key: 'staff', label: 'Staff', icon: 'staff' },
+  { key: 'activity', label: 'Activity Log', icon: 'clipboard' },
 ]
 
 function HospitalDetailPage() {
@@ -37,6 +42,7 @@ function HospitalDetailPage() {
   const [hospital, setHospital] = useState(undefined)
   const [staff, setStaff] = useState([])
   const [features, setFeatures] = useState(undefined)
+  const [limits, setLimits] = useState(undefined)
   const [togglingStatus, setTogglingStatus] = useState(false)
   const [showStaffForm, setShowStaffForm] = useState(false)
   const [newCredentials, setNewCredentials] = useState(null)
@@ -57,6 +63,12 @@ function HospitalDetailPage() {
     if (activeTab !== 'features') return
     return subscribeToHospitalFeatures(slug, setFeatures)
   }, [slug, activeTab])
+  // Same reasoning, for the Limits tab — also needed on the Staff tab so
+  // "Add Staff" can be checked against the hospital's seat caps.
+  useEffect(() => {
+    if (activeTab !== 'limits' && activeTab !== 'staff') return
+    return subscribeToHospitalLimits(slug, setLimits)
+  }, [slug, activeTab])
   // Same reasoning, for Overview's stat cards — these used to be hardcoded
   // to 0 regardless of real data; only fetch when that tab is actually open.
   useEffect(() => {
@@ -65,6 +77,7 @@ function HospitalDetailPage() {
   }, [slug, activeTab])
   useEffect(() => setActiveTab('overview'), [slug])
   useEffect(() => setFeatures(undefined), [slug])
+  useEffect(() => setLimits(undefined), [slug])
   useEffect(() => setAppointments(undefined), [slug])
 
   if (hospital === undefined) return <PageSpinner />
@@ -103,7 +116,18 @@ function HospitalDetailPage() {
   async function toggleStatus() {
     setTogglingStatus(true)
     try {
-      await updateHospital(slug, { status: hospital.status === 'trial' ? 'active' : 'trial' })
+      const nextStatus = hospital.status === 'trial' ? 'active' : 'trial'
+      await updateHospital(slug, { status: nextStatus })
+      logActivity({
+        hospitalId: slug,
+        action: 'hospital.status_changed',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        targetType: 'hospital',
+        targetId: slug,
+        targetLabel: hospital.title,
+        details: `Switched to ${nextStatus === 'active' ? 'Ongoing' : 'Trial'}`,
+      })
     } finally {
       setTogglingStatus(false)
     }
@@ -214,6 +238,14 @@ function HospitalDetailPage() {
             <PageSpinner />
           ) : (
             <FeatureManagementPanel hospitalId={hospital.slug} features={features} />
+          )
+        )}
+
+        {activeTab === 'limits' && (
+          limits === undefined ? (
+            <PageSpinner />
+          ) : (
+            <LimitsManagementPanel hospitalId={hospital.slug} limits={limits} />
           )
         )}
 
@@ -375,11 +407,15 @@ function HospitalDetailPage() {
             </div>
           </section>
         )}
+
+        {activeTab === 'activity' && <HospitalActivityLogPanel hospitalId={hospital.slug} />}
       </div>
 
       {showStaffForm && (
         <StaffFormModal
           hospitalId={slug}
+          existingStaff={staff}
+          limits={limits}
           onCancel={() => setShowStaffForm(false)}
           onCreated={(credentials) => {
             setShowStaffForm(false)

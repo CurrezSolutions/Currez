@@ -3,6 +3,7 @@ import { subscribeHospital } from '../firebase/hospitals'
 import { subscribeUsersByHospital } from '../firebase/users'
 import { subscribePatients } from '../firebase/patients'
 import { subscribeAppointments } from '../firebase/appointments'
+import { subscribeToHospitalLimits } from '../firebase/hospitalLimits'
 import { shiftDateString } from '../utils/dates'
 
 const HospitalDataContext = createContext(null)
@@ -14,7 +15,7 @@ const HospitalDataContext = createContext(null)
 // one per page.
 const APPOINTMENTS_WINDOW_DAYS = 365
 
-const EMPTY_STATE = { hospital: undefined, staff: null, patients: null, appointments: null }
+const EMPTY_STATE = { hospital: undefined, staff: null, patients: null, appointments: null, limits: undefined }
 
 // Lives inside /dashboard, mounted once per session (alongside
 // FeatureProvider) — the single source of truth for the hospital doc, staff
@@ -46,22 +47,27 @@ export function HospitalDataProvider({ tenantSlug, children }) {
       (appointments) => setState((prev) => ({ ...prev, appointments })),
       windowStart
     )
+    const unsubLimits = subscribeToHospitalLimits(tenantSlug, (limits) =>
+      setState((prev) => ({ ...prev, limits }))
+    )
 
     return () => {
       unsubHospital()
       unsubStaff()
       unsubPatients()
       unsubAppointments()
+      unsubLimits()
     }
   }, [tenantSlug])
 
   const value = useMemo(() => {
-    const { hospital, staff, patients, appointments } = state
+    const { hospital, staff, patients, appointments, limits } = state
     return {
       hospital,
       staff: staff || [],
       patients: patients || [],
       appointments: appointments || [],
+      limits,
       ready: hospital !== undefined && staff !== null && patients !== null && appointments !== null,
     }
   }, [state])

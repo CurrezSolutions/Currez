@@ -132,7 +132,11 @@ function App() {
                     {/* Hospital admin only */}
                     <Route element={<RequireRole allowedRoles={[ROLES.HOSPITAL_ADMIN]} />}>
                       <Route path="staff" element={<StaffPage tenantSlug={tenantSlug} />} />
-                      <Route path="activity-log" element={<ActivityLogPage tenantSlug={tenantSlug} />} />
+                      {/* Off by default — only if the Super Admin has turned
+                          the Activity Log module on for this hospital */}
+                      <Route element={<RequireFeature featureKey="activityLog" />}>
+                        <Route path="activity-log" element={<ActivityLogPage tenantSlug={tenantSlug} />} />
+                      </Route>
                     </Route>
 
                     {/* Receptionist only — read-only doctor schedules */}

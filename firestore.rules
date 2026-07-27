@@ -87,6 +87,22 @@ service cloud.firestore {
         get(/databases/$(database)/documents/hospitalFeatures/$(hospitalId)).data.features[featureKey] == true;
     }
 
+    // The Super-Admin-set daily patient/appointment cap for a hospital (see
+    // src/config/limitsRegistry.js's maxPatientsPerDay and
+    // src/firebase/hospitalLimits.js). A hospital with no hospitalLimits doc
+    // yet hasn't been touched by the Limits panel, so it falls back to that
+    // key's registry default (60) — keep this number in sync with
+    // limitsRegistry.js if that default ever changes. A stored value of
+    // `null` means "Unlimited", normalized here to a very large number so
+    // callers (hospitalDailyCounts below) can always just compare with <=.
+    function hospitalDailyPatientLimit(hospitalId) {
+      return !exists(/databases/$(database)/documents/hospitalLimits/$(hospitalId))
+        ? 60
+        : (get(/databases/$(database)/documents/hospitalLimits/$(hospitalId)).data.get('limits', {}).get('maxPatientsPerDay', 60) == null
+            ? 999999999
+            : get(/databases/$(database)/documents/hospitalLimits/$(hospitalId)).data.get('limits', {}).get('maxPatientsPerDay', 60));
+    }
+
     // Whether this staff member may operate Billing for their own hospital.
     // Hospital Admin always can; a Receptionist can unless access has been
     // turned off for them via EITHER of two fields on their own user doc —
@@ -292,6 +308,27 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Doc ID is `{hospitalId}::{date}` — counts every appointment booked for
+    // a hospital on one calendar date (staff and public bookings alike),
+    // checked+updated atomically inside createAppointment (see
+    // src/firebase/appointments.js) against that hospital's Super-Admin-set
+    // maxPatientsPerDay (src/config/limitsRegistry.js). Re-enforced here,
+    // same reasoning as phoneDailyCounts above, so the cap can't be bypassed
+    // by calling the SDK directly: a create must start at count 1 and an
+    // update must increment by exactly 1, and either way the resulting count
+    // may never exceed the hospital's configured (or default) daily limit.
+    match /hospitalDailyCounts/{countId} {
+      allow get: if true;
+      allow list: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
+      allow create: if request.resource.data.hospitalId is string &&
+                       request.resource.data.date is string &&
+                       request.resource.data.count == 1 &&
+                       request.resource.data.count <= hospitalDailyPatientLimit(request.resource.data.hospitalId);
+      allow update: if request.resource.data.count == resource.data.count + 1 &&
+                       request.resource.data.count <= hospitalDailyPatientLimit(resource.data.hospitalId);
+      allow delete: if isSuperAdmin();
+    }
+
     // Per-hospital module toggles (see src/config/featureRegistry.js and
     // src/firebase/hospitalFeatures.js). Doc ID == hospitalId. Staff of the
     // hospital may read their own flags (the client feature-gate depends on
@@ -300,6 +337,22 @@ service cloud.firestore {
     // can use it," independent of anything the client sends.
     match /hospitalFeatures/{hospitalId} {
       allow get: if isSuperAdmin() || isHospitalStaffOf(hospitalId);
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Per-hospital plan limits (see src/config/limitsRegistry.js and
+    // src/firebase/hospitalLimits.js) — staff seat caps, daily patient cap,
+    // monthly email allowance. Doc ID == hospitalId. Public get, same
+    // reasoning as hospitals/{slug} and doctorSlots above: createAppointment
+    // (src/firebase/appointments.js) reads maxPatientsPerDay to enforce the
+    // daily cap for EVERY booking, including an unauthenticated patient's
+    // own self-booking — without this, that read was denied and broke
+    // public booking entirely (permission-denied on the whole transaction).
+    // Contains only plan numbers, nothing sensitive. Only the Super Admin
+    // may ever write these.
+    match /hospitalLimits/{hospitalId} {
+      allow get: if true;
       allow list: if isSuperAdmin();
       allow create, update, delete: if isSuperAdmin();
     }
@@ -501,22 +554,30 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Append-only activity feed for sensitive staff actions (invoice
+    // Append-only activity feed for sensitive staff/admin actions (invoice
     // voided, staff deactivated/reactivated, permissions changed, staff
-    // created, appointment cancelled — see src/firebase/activityLog.js for
-    // exactly what writes an entry). Any active staff member may create an
-    // entry for their own hospital (recording their own action — there is
-    // nothing to gain by writing a false one, and every write path in the
-    // app that calls this always also performs the real action under its
-    // own, separately-enforced rule); Super Admin may create one for any
-    // hospital too (e.g. creating that hospital's first Hospital Admin —
-    // isHospitalStaffOf alone would exclude Super Admin, since their own
-    // hospitalId is null). Entries are permanently immutable once written
-    // (no update, no delete, not even for Super Admin — an audit log that
-    // can be edited after the fact isn't one) and only visible to that
-    // hospital's own admin or the Super Admin, not to Doctors/Receptionists.
+    // created, appointment cancelled, hospital module/limit changes, bed
+    // admit/discharge/transfer — see src/firebase/activityLog.js for exactly
+    // what writes an entry). Any active staff member may create an entry for
+    // their own hospital (recording their own action — there is nothing to
+    // gain by writing a false one, and every write path in the app that
+    // calls this always also performs the real action under its own,
+    // separately-enforced rule); Super Admin may create one for any hospital
+    // too (e.g. toggling a module/limit, or creating that hospital's first
+    // Hospital Admin — isHospitalStaffOf alone would exclude Super Admin,
+    // since their own hospitalId is null). Entries are permanently immutable
+    // once written (no update, no delete, not even for Super Admin — an
+    // audit log that can be edited after the fact isn't one).
+    //
+    // Reads: Super Admin can always see any hospital's log (it's primarily
+    // their own oversight/support tool — see HospitalActivityLogPanel).
+    // A hospital's own admin can only see it once Super Admin has turned the
+    // 'activityLog' module on for them (src/config/featureRegistry.js) — off
+    // by default, since most hospitals don't need to see this themselves.
+    // Doctors/Receptionists never see it either way.
     match /activityLog/{entryId} {
-      allow get, list: if isSuperAdmin() || isHospitalAdminOf(resource.data.hospitalId);
+      allow get, list: if isSuperAdmin() ||
+        (isHospitalAdminOf(resource.data.hospitalId) && hospitalHasFeature(resource.data.hospitalId, 'activityLog'));
       allow create: if isSuperAdmin() || isHospitalStaffOf(request.resource.data.hospitalId);
       allow update, delete: if false;
     }

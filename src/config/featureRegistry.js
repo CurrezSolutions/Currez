@@ -153,14 +153,17 @@ export const FEATURE_REGISTRY = [
     icon: 'clipboard',
     path: 'activity-log',
     allowedRoles: [ROLES.HOSPITAL_ADMIN],
-    category: FEATURE_CATEGORIES.CORE,
-    // Always on, same as Staff — an oversight/security baseline every
-    // hospital should have, not a paid module a Super Admin opts hospitals
-    // into. Doctors/Receptionists never see it (matches firestore.rules'
-    // /activityLog read rule, and Staff's own precedent of not needing a
-    // RequirePermission override — nothing to narrow further below
-    // Hospital-Admin-only).
-    isCore: true,
+    category: FEATURE_CATEGORIES.OPERATIONS,
+    // Off by default, unlike most other CORE modules — most hospitals never
+    // need to look at their own audit trail day-to-day, so there's no reason
+    // to default every hospital into it. Super Admin can turn it on per
+    // hospital from here same as any other module — but Super Admin's OWN
+    // access to any hospital's log is never gated by this flag at all (see
+    // firestore.rules' /activityLog read rule and
+    // HospitalActivityLogPanel): it's primarily their own oversight/support
+    // tool, and stays available even for hospitals that never opt in.
+    isCore: false,
+    defaultEnabled: false,
   },
 ]
 

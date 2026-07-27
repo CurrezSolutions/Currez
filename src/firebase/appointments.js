@@ -12,11 +12,13 @@ import {
 } from 'firebase/firestore'
 import { db } from './config'
 import { generateToken } from '../utils/appointmentToken'
+import { HOSPITAL_LIMITS_COLLECTION, normalizeLimits } from './hospitalLimits'
 
 const APPOINTMENTS_COLLECTION = 'appointments'
 const PHONE_LOOKUP_COLLECTION = 'phoneLookup'
 const DOCTOR_SLOTS_COLLECTION = 'doctorSlots'
 const PHONE_DAILY_COUNTS_COLLECTION = 'phoneDailyCounts'
+const HOSPITAL_DAILY_COUNTS_COLLECTION = 'hospitalDailyCounts'
 
 // A phone number may only self-book this many appointments for the same
 // calendar date via the public booking form. Staff booking on a patient's
@@ -41,6 +43,41 @@ function doctorSlotId(hospitalId, doctorId, date) {
 
 function phoneDailyCountId(hospitalId, phone, date) {
   return `${hospitalId}::${normalizePhone(phone)}::${date}`
+}
+
+function hospitalDailyCountId(hospitalId, date) {
+  return `${hospitalId}::${date}`
+}
+
+// Checks the hospital's configured daily patient cap (see
+// src/config/limitsRegistry.js's maxPatientsPerDay and
+// src/firebase/hospitalLimits.js) and returns the write needed to record one
+// more confirmed patient against it for `date` — or `null` if the hospital
+// has no cap configured (Unlimited), in which case there's nothing to read
+// or write. Must be called before any writes on the given transaction (it
+// does its own reads). Throws if claiming one more slot would exceed the cap.
+//
+// Deliberately counts *confirmed* patients, not raw bookings: a patient
+// self-booking always starts `pending` and is never counted here (see
+// createAppointment below) — only once front-desk actually confirms it (see
+// confirmAppointment) does it consume a slot. A pending request that's later
+// rejected, ignored, or never shows up never permanently eats the day's cap.
+// A staff booking made directly against a chosen doctor (already `scheduled`
+// from creation) is a commitment from the start, so it's counted immediately.
+async function checkAndClaimDailyPatientSlot(transaction, hospitalId, date) {
+  const limitsSnap = await transaction.get(doc(db, HOSPITAL_LIMITS_COLLECTION, hospitalId))
+  const maxPerDay = normalizeLimits(limitsSnap.exists() ? limitsSnap.data().limits : undefined).maxPatientsPerDay
+  if (maxPerDay === null || maxPerDay === undefined) return null
+
+  const countRef = doc(db, HOSPITAL_DAILY_COUNTS_COLLECTION, hospitalDailyCountId(hospitalId, date))
+  const countSnap = await transaction.get(countRef)
+  const count = (countSnap.exists() ? countSnap.data().count || 0 : 0) + 1
+  if (count > maxPerDay) {
+    throw new Error(
+      `This hospital has reached its plan limit of ${maxPerDay} confirmed patients for ${date}. Contact your plan administrator to increase this limit.`
+    )
+  }
+  return { ref: countRef, data: { hospitalId, date, count, updatedAt: serverTimestamp() } }
 }
 
 export function subscribeAppointments(hospitalId, callback, startDate, endDate) {
@@ -180,9 +217,19 @@ export async function createAppointment(data, createdBy) {
         }
       }
 
+      // Only a booking that's already confirmed at creation time (a staff
+      // booking made directly against a chosen doctor) counts against the
+      // daily cap here — a patient's own `pending` self-booking is counted
+      // later, when front-desk actually confirms it (see confirmAppointment
+      // and checkAndClaimDailyPatientSlot's comment above for why).
+      const hospitalCountWrite = effectiveStatus === 'scheduled'
+        ? await checkAndClaimDailyPatientSlot(transaction, data.hospitalId, data.date)
+        : null
+
       // --- writes ---
       for (const w of slotWrites) transaction.set(w.ref, w.data, { merge: true })
       if (phoneCountWrite) transaction.set(phoneCountWrite.ref, phoneCountWrite.data, { merge: true })
+      if (hospitalCountWrite) transaction.set(hospitalCountWrite.ref, hospitalCountWrite.data, { merge: true })
 
       transaction.set(ref, {
         ...data,
@@ -265,7 +312,11 @@ export function completeAppointmentWithNotes(appointmentId, { concerns, prescrip
 // left blank, or no longer fit the assigned doctor's schedule, so
 // confirmation is where a definite slot is locked in — atomically: whatever
 // slot this appointment previously held (if any) is released and the new
-// one claimed, rejecting if someone else already holds it.
+// one claimed, rejecting if someone else already holds it. This is also the
+// point where a `pending` appointment first counts against the hospital's
+// daily patient cap (see checkAndClaimDailyPatientSlot above) — guarded by
+// `prior.status !== 'scheduled'` so re-confirming an already-scheduled
+// appointment (e.g. just changing the payment method) never double-counts it.
 export function confirmAppointment(appointmentId, { paymentMethod, confirmedBy, date, time, doctorId, doctorName }) {
   const apptRef = doc(db, APPOINTMENTS_COLLECTION, appointmentId)
 
@@ -282,7 +333,12 @@ export function confirmAppointment(appointmentId, { paymentMethod, confirmedBy, 
       { doctorId: finalDoctorId, date, time }
     )
 
+    const hospitalCountWrite = prior.status !== 'scheduled'
+      ? await checkAndClaimDailyPatientSlot(transaction, prior.hospitalId, date)
+      : null
+
     for (const w of slotWrites) transaction.set(w.ref, w.data, { merge: true })
+    if (hospitalCountWrite) transaction.set(hospitalCountWrite.ref, hospitalCountWrite.data, { merge: true })
 
     transaction.update(apptRef, {
       status: 'scheduled',

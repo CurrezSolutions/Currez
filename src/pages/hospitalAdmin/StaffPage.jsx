@@ -22,7 +22,7 @@ import Pagination from "../../components/common/Pagination";
 function StaffPage({ tenantSlug }) {
   const { enabled: billingEnabled } = useFeature("billing");
   const { user } = useAuth();
-  const { staff } = useHospitalData();
+  const { staff, limits } = useHospitalData();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCredentials, setNewCredentials] = useState(null);
   const [scheduleDoctor, setScheduleDoctor] = useState(null);
@@ -310,6 +310,8 @@ function StaffPage({ tenantSlug }) {
         <StaffFormModal
           hospitalId={tenantSlug}
           allowedRoles={CREATABLE_STAFF_ROLES_BY_HOSPITAL_ADMIN}
+          existingStaff={staff}
+          limits={limits}
           onCancel={() => setShowAddModal(false)}
           onCreated={(credentials) => {
             setShowAddModal(false);

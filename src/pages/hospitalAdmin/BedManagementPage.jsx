@@ -13,6 +13,7 @@ import {
   updateBedConfig,
 } from '../../firebase/bedManagement'
 import { autoCreateDischargeInvoice } from '../../firebase/billing'
+import { logActivity } from '../../firebase/activityLog'
 import { flattenBeds, computeOccupancyStats, setBedStatusInConfig } from '../../utils/bedManagement'
 import BedGrid from '../../components/hospitalAdmin/BedGrid'
 import BedStatsPanel from '../../components/hospitalAdmin/BedStatsPanel'
@@ -87,6 +88,15 @@ function BedManagementPage({ tenantSlug }) {
       },
       user.email
     )
+    logActivity({
+      hospitalId: tenantSlug,
+      action: 'admission.admitted',
+      actorUid: user.uid,
+      actorEmail: user.email,
+      targetType: 'patient',
+      targetLabel: data.patientName,
+      details: `${admitModal.wardName} · ${admitModal.roomName} · Bed ${admitModal.bedId}`,
+    })
   }
 
   async function handleDischarge(admissionId, data) {
@@ -94,6 +104,15 @@ function BedManagementPage({ tenantSlug }) {
     await dischargePatient(admissionId, {
       ...dischargeData,
       dischargedBy: user.email,
+    })
+    logActivity({
+      hospitalId: tenantSlug,
+      action: 'admission.discharged',
+      actorUid: user.uid,
+      actorEmail: user.email,
+      targetType: 'patient',
+      targetId: admissionId,
+      targetLabel: dischargeModal?.patientName,
     })
 
     if (createInvoice && billingEnabled && dischargeModal) {
@@ -138,6 +157,16 @@ function BedManagementPage({ tenantSlug }) {
 
   async function handleTransfer(destination) {
     await transferAdmission(transferModal, destination, user.email)
+    logActivity({
+      hospitalId: tenantSlug,
+      action: 'admission.transferred',
+      actorUid: user.uid,
+      actorEmail: user.email,
+      targetType: 'patient',
+      targetId: transferModal?.id,
+      targetLabel: transferModal?.patientName,
+      details: `${destination.wardName} · ${destination.roomName} · Bed ${destination.bedId}`,
+    })
   }
 
   if (config === undefined || activeAdmissions === null) {

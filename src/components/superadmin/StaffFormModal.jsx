@@ -8,6 +8,8 @@ import { validators } from '../../utils/validations'
 import { useFormValidation } from '../../hooks/useFormValidation'
 import { generatePassword } from '../../utils/generatePassword'
 import { DEFAULT_SCHEDULE } from '../../utils/doctorSchedule'
+import { limitKeyForRole, countActiveStaffByRole, isAtStaffCap } from '../../utils/staffLimits'
+import { getLimitDefinition } from '../../config/limitsRegistry'
 import Modal from '../common/Modal'
 import NavIcon from '../common/NavIcon'
 
@@ -17,7 +19,7 @@ const labelClass = 'block text-sm font-medium text-body'
 
 // Reused by both the superadmin (any creatable role) and hospital-admin
 // (doctors/receptionists only, via `allowedRoles`) staff-creation flows.
-function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCreated, onCancel }) {
+function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, existingStaff = [], limits = null, onCreated, onCancel }) {
   const { user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState(generatePassword())
@@ -33,10 +35,20 @@ function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCr
     specialization: role === ROLES.DOCTOR ? [validators.required('Specialization is required for doctors.')] : [],
   })
 
+  const atCap = isAtStaffCap(existingStaff, limits, role)
+  const capLimitKey = limitKeyForRole(role)
+  const capLimitDef = capLimitKey ? getLimitDefinition(capLimitKey) : null
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     if (!validate({ displayName, email, password, specialization })) return
+    if (atCap) {
+      setError(
+        `This hospital's plan allows up to ${limits[capLimitKey]} ${capLimitDef?.label.toLowerCase() || 'seats for this role'}. Contact your plan administrator to increase this limit.`
+      )
+      return
+    }
     setSubmitting(true)
     try {
       const trimmedEmail = email.trim()
@@ -118,6 +130,13 @@ function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCr
               </option>
             ))}
           </select>
+          {atCap && (
+            <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+              This hospital's plan allows up to {limits[capLimitKey]} {capLimitDef?.label.toLowerCase()} —
+              {' '}{countActiveStaffByRole(existingStaff, role)} already active. Contact your plan
+              administrator to increase this limit.
+            </p>
+          )}
         </div>
 
         {role === ROLES.DOCTOR && (
@@ -170,7 +189,7 @@ function StaffFormModal({ hospitalId, allowedRoles = CREATABLE_STAFF_ROLES, onCr
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || atCap}
             className="cursor-pointer rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/25 transition-all hover:bg-indigo-500 hover:shadow-md hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-sm"
           >
             {submitting ? 'Creating…' : 'Create account'}

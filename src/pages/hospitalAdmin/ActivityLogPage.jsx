@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { subscribeActivityLog, ACTIVITY_LABELS } from '../../firebase/activityLog'
+import { useMemo, useState } from 'react'
+import { ACTIVITY_LABELS, fetchAllActivityLogEntries } from '../../firebase/activityLog'
+import { useActivityLog } from '../../hooks/useActivityLog'
 import { useHospitalData } from '../../contexts/HospitalDataContext'
+import { toCsv, downloadCsv } from '../../utils/csv'
 import { PageSpinner } from '../../components/common/Spinner'
 import NavIcon from '../../components/common/NavIcon'
 import Pagination from '../../components/common/Pagination'
@@ -13,6 +15,12 @@ const ACTION_STYLES = {
   'staff.permissions_changed': 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400',
   'staff.billing_access_changed': 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400',
   'appointment.cancelled': 'bg-slate-400/10 text-slate-500 ring-slate-400/20',
+  'hospital.feature_toggled': 'bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400',
+  'hospital.limit_changed': 'bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400',
+  'hospital.status_changed': 'bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400',
+  'admission.admitted': 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400',
+  'admission.discharged': 'bg-slate-400/10 text-slate-500 ring-slate-400/20',
+  'admission.transferred': 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400',
 }
 
 function formatTimestamp(ts) {
@@ -22,14 +30,13 @@ function formatTimestamp(ts) {
 
 function ActivityLogPage({ tenantSlug }) {
   const { staff } = useHospitalData()
-  const [entries, setEntries] = useState(undefined)
+  const { entries, hasMore, loadingMore, error, loadMore, reload } = useActivityLog(tenantSlug)
   const [search, setSearch] = useState('')
   const [actionFilter, setActionFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
+  const [downloading, setDownloading] = useState(false)
 
   const PAGE_SIZE = 20
-
-  useEffect(() => subscribeActivityLog(tenantSlug, setEntries), [tenantSlug])
 
   const staffByUid = useMemo(() => Object.fromEntries((staff || []).map((s) => [s.uid, s])), [staff])
 
@@ -60,16 +67,52 @@ function ActivityLogPage({ tenantSlug }) {
     [filtered, currentPage]
   )
 
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      const all = await fetchAllActivityLogEntries(tenantSlug)
+      const csv = toCsv(all, [
+        { label: 'Date', value: (e) => formatTimestamp(e.createdAt) },
+        { label: 'Action', value: (e) => ACTIVITY_LABELS[e.action] || e.action },
+        { label: 'Actor', value: (e) => staffByUid[e.actorUid]?.displayName || e.actorEmail || '' },
+        { label: 'Target', value: (e) => e.targetLabel || '' },
+        { label: 'Details', value: (e) => e.details || '' },
+      ])
+      downloadCsv(`${tenantSlug}-activity-log.csv`, csv)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   if (entries === undefined) return <PageSpinner />
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-heading">Activity Log</h1>
-        <p className="mt-0.5 text-sm text-muted">
-          A permanent, tamper-proof record of sensitive actions taken on this hospital's account — invoice voids, staff
-          status/permission changes, appointment cancellations. Entries can never be edited or deleted, by anyone.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-heading">Activity Log</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            A permanent, tamper-proof record of sensitive actions taken on this hospital's account. Entries can never
+            be edited or deleted, by anyone.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={reload}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-body transition-colors hover:bg-card-strong hover:text-heading"
+          >
+            <NavIcon name="schedule" className="h-3.5 w-3.5" />
+            Refresh
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-body transition-colors hover:bg-card-strong hover:text-heading disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <NavIcon name="clipboard" className="h-3.5 w-3.5" />
+            {downloading ? 'Preparing…' : 'Download CSV'}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -91,6 +134,8 @@ function ActivityLogPage({ tenantSlug }) {
           ))}
         </select>
       </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
         {filtered.length === 0 ? (
@@ -129,6 +174,18 @@ function ActivityLogPage({ tenantSlug }) {
 
       {filtered.length > 0 && (
         <Pagination currentPage={currentPage} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} />
+      )}
+
+      {hasMore && (
+        <div className="flex justify-center">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="cursor-pointer rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-body transition-colors hover:bg-card-strong hover:text-heading disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading…' : 'Load older entries'}
+          </button>
+        </div>
       )}
     </div>
   )

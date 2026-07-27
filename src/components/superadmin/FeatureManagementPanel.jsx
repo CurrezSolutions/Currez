@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FEATURE_REGISTRY } from '../../config/featureRegistry'
 import { setHospitalFeatureEnabled, isFeatureEnabled } from '../../firebase/hospitalFeatures'
+import { logActivity } from '../../firebase/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
 import NavIcon from '../common/NavIcon'
 
@@ -16,6 +17,16 @@ function FeatureManagementPanel({ hospitalId, features }) {
     setError('')
     try {
       await setHospitalFeatureEnabled(hospitalId, feature.key, nextEnabled, user?.email)
+      logActivity({
+        hospitalId,
+        action: 'hospital.feature_toggled',
+        actorUid: user?.uid,
+        actorEmail: user?.email,
+        targetType: 'feature',
+        targetId: feature.key,
+        targetLabel: feature.label,
+        details: nextEnabled ? 'Turned on' : 'Turned off',
+      })
     } catch (err) {
       setError(err.message)
     } finally {

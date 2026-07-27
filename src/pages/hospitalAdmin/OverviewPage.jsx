@@ -4,6 +4,7 @@ import { ROLES } from '../../utils/roles'
 import { todayDateString } from '../../utils/dates'
 import StatCard from '../../components/superadmin/StatCard'
 import StatusBadge from '../../components/superadmin/StatusBadge'
+import PlanLimitsPanel from '../../components/hospitalAdmin/PlanLimitsPanel'
 import DoctorOverviewPage from './DoctorOverviewPage'
 
 function OverviewPage() {
@@ -13,13 +14,19 @@ function OverviewPage() {
 }
 
 function HospitalOverview() {
-  const { hospital, appointments, patients, staff } = useHospitalData()
+  const { role } = useAuth()
+  const { hospital, appointments, patients, staff, limits } = useHospitalData()
 
   const today = todayDateString()
   const todaysAppointments = appointments.filter((a) => a.date === today)
   const doctorCount = staff.filter((s) => s.role === ROLES.DOCTOR && s.status === 'active').length
   const pendingCount = todaysAppointments.filter((a) => a.status === 'pending').length
   const completedCount = todaysAppointments.filter((a) => a.status === 'completed').length
+  // Matches what actually counts against the plan's daily patient cap (see
+  // checkAndClaimDailyPatientSlot in src/firebase/appointments.js): a
+  // `pending` self-booking isn't confirmed yet and doesn't count, so this
+  // stays lower than todaysAppointments.length until reception confirms it.
+  const confirmedTodayCount = todaysAppointments.filter((a) => a.status === 'scheduled' || a.status === 'completed').length
 
   const greetingTime = new Date().getHours()
   const greeting = greetingTime < 12 ? 'Good morning' : greetingTime < 17 ? 'Good afternoon' : 'Good evening'
@@ -121,6 +128,10 @@ function HospitalOverview() {
           )}
         </div>
       </div>
+
+      {role === ROLES.HOSPITAL_ADMIN && (
+        <PlanLimitsPanel staff={staff} patientsToday={confirmedTodayCount} limits={limits} />
+      )}
     </div>
   )
 }
