@@ -95,7 +95,7 @@ function Footer({ config, onStatusClick }) {
 
       <div className="border-t border-line">
         <p className={`py-5 text-center text-xs text-faint ${SITE_CONTAINER}`}>
-          © {new Date().getFullYear()} {title}. {t('hospital.allRightsReserved')}
+          © {new Date().getFullYear()} {title}. {t('hospital.allRightsReserved')} • Powered by Currez v2.0.0
         </p>
       </div>
     </footer>

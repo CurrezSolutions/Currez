@@ -35,7 +35,7 @@ function SuperAdminLayout() {
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-heading">{user?.email}</p>
-        <p className="truncate text-[11px] text-faint">Super Admin</p>
+        <p className="truncate text-[11px] text-faint">Super Admin • v2.0.0</p>
       </div>
     </div>
   );

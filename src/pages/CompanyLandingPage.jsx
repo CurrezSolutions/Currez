@@ -667,7 +667,7 @@ function CompanyLandingPage() {
         className={`flex flex-col items-center justify-between gap-4 border-t border-line py-8 font-plex-mono text-[11px] text-faint sm:flex-row ${CONTAINER}`}
       >
         <div>
-          <p>© {new Date().getFullYear()} Currez Technologies. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Currez Technologies v2.0.0. All rights reserved.</p>
           <p className="mt-1 text-muted">
             Support: <a href="mailto:support@currez.in" className="hover:text-heading underline">support@currez.in</a> | Sales: <a href="mailto:medideskpro@gmail.com" className="hover:text-heading underline">medideskpro@gmail.com</a>
           </p>

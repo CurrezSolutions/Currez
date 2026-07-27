@@ -58,7 +58,7 @@ function HospitalPortalLayout() {
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-heading">{user?.displayName || user?.email}</p>
-        <p className="truncate text-[11px] text-faint">{ROLE_LABELS[role]}</p>
+        <p className="truncate text-[11px] text-faint">{ROLE_LABELS[role]} • v2.0.0</p>
       </div>
     </div>
   )
