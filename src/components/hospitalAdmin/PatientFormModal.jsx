@@ -10,10 +10,10 @@ const inputClass =
   'mt-1 w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm text-heading placeholder:text-faint focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/10'
 const labelClass = 'block text-sm font-medium text-body'
 
-function PatientFormModal({ hospitalId, onCreated, onCancel }) {
+function PatientFormModal({ hospitalId, initialPhone = '', onCreated, onCancel }) {
   const { user } = useAuth()
   const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [phone, setPhone] = useState(initialPhone)
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -29,8 +29,8 @@ function PatientFormModal({ hospitalId, onCreated, onCancel }) {
     if (!validate({ name, phone, email })) return
     setSubmitting(true)
     try {
-      await createPatient(hospitalId, { name, phone, email }, user.uid)
-      onCreated()
+      const patientId = await createPatient(hospitalId, { name, phone, email }, user.uid)
+      onCreated(patientId)
     } catch (err) {
       setError(err.message)
     } finally {

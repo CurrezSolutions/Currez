@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { subscribeHospital } from '../../firebase/hospitals'
 import { subscribeActiveDoctors } from '../../firebase/users'
-import { createPatient } from '../../firebase/patients'
+import { createPatient, getPatientsByPhone, MAX_PATIENTS_PER_PHONE } from '../../firebase/patients'
 import { createAppointment, getDoctorBookedTimes } from '../../firebase/appointments'
 import { weekdayKeyForDate, availableSlotsForDate } from '../../utils/doctorSchedule'
 import { todayDateString } from '../../utils/dates'
@@ -38,14 +38,55 @@ function BookAppointmentForm({ slug, onCheckStatus }) {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
+
+  // Existing patients already registered under the phone number being
+  // typed, so a returning patient can pick themselves instead of the form
+  // silently creating a duplicate patient record every visit (see
+  // createPatient in src/firebase/patients.js). '' = undecided/no matches
+  // yet, 'new' = explicitly registering a new patient, otherwise a patient id.
+  const [existingPatients, setExistingPatients] = useState([])
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const isNewPatient = selectedPatientId === 'new' || existingPatients.length === 0
+  const atPatientCap = existingPatients.length >= MAX_PATIENTS_PER_PHONE
+
   const { errors, validate, clearFieldError } = useFormValidation({
-    name: [validators.required('Name is required.')],
+    name: isNewPatient ? [validators.required('Name is required.')] : [],
     phone: [validators.required('Phone is required.'), validators.phone('Enter a valid phone number.')],
     date: [validators.required('Date is required.')],
   })
 
   useEffect(() => subscribeHospital(slug, setHospital), [slug])
   useEffect(() => subscribeActiveDoctors(slug, setDoctors), [slug])
+
+  // Debounced so we don't fire a lookup on every keystroke while the digit
+  // count happens to sit at/above 10 (e.g. typing a country code first).
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setExistingPatients([])
+      setSelectedPatientId('')
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      getPatientsByPhone(slug, phone)
+        .then((patients) => {
+          if (cancelled) return
+          setExistingPatients(patients)
+          setSelectedPatientId(patients.length > 0 ? patients[0].id : '')
+        })
+        // Best-effort: if the lookup fails (offline, rules not yet
+        // deployed, etc.) fall back to the plain "enter your name" flow
+        // instead of leaving the form silently stuck.
+        .catch((err) => {
+          if (!cancelled) console.error('Patient phone lookup failed:', err)
+        })
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [slug, phone])
 
   // Time isn't required to submit — a patient can leave it as "any time"
   // and reception will pick an exact slot when they confirm at the desk.
@@ -81,12 +122,21 @@ function BookAppointmentForm({ slug, onCheckStatus }) {
     if (!validate({ name, phone, date, time })) return
     setSubmitting(true)
     try {
-      const patientId = await createPatient(slug, { name, phone, email: '' }, 'public')
+      let patientId
+      let patientName
+      if (isNewPatient) {
+        patientId = await createPatient(slug, { name, phone, email: '' }, 'public')
+        patientName = name.trim()
+      } else {
+        patientId = selectedPatientId
+        patientName = existingPatients.find((p) => p.id === selectedPatientId)?.name || name.trim()
+      }
+
       const token = await createAppointment(
         {
           hospitalId: slug,
           patientId,
-          patientName: name.trim(),
+          patientName,
           patientPhone: phone.trim(),
           doctorId: doctorId || null,
           doctorName: selectedDoctor?.displayName || '',
@@ -161,7 +211,62 @@ function BookAppointmentForm({ slug, onCheckStatus }) {
       <p className="mt-1 text-sm text-muted">{t('booking.subtitle', { hospital: hospital.title })}</p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>{t('booking.phoneNumber')}</label>
+          <input
+            type="tel"
+            placeholder="+91"
+            value={phone}
+            onChange={(e) => { setPhone(e.target.value); clearFieldError('phone') }}
+            className={inputClass}
+          />
+          {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
+        </div>
+
+        {existingPatients.length > 0 && (
+          <div>
+            <label className={labelClass}>Who is this booking for?</label>
+            <div className="mt-1.5 space-y-1.5">
+              {existingPatients.map((p) => (
+                <label
+                  key={p.id}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                    selectedPatientId === p.id ? 'border-line-strong bg-card-strong' : 'border-line bg-card'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="existingPatient"
+                    checked={selectedPatientId === p.id}
+                    onChange={() => setSelectedPatientId(p.id)}
+                  />
+                  <span className="text-heading">{p.name}</span>
+                </label>
+              ))}
+              <label
+                className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  atPatientCap ? 'cursor-not-allowed border-line bg-card opacity-50' : 'cursor-pointer'
+                } ${selectedPatientId === 'new' ? 'border-line-strong bg-card-strong' : 'border-line bg-card'}`}
+              >
+                <input
+                  type="radio"
+                  name="existingPatient"
+                  checked={selectedPatientId === 'new'}
+                  disabled={atPatientCap}
+                  onChange={() => setSelectedPatientId('new')}
+                />
+                <span className="text-heading">+ Someone else / new patient</span>
+              </label>
+            </div>
+            {atPatientCap && (
+              <p className="mt-1.5 text-xs text-faint">
+                This phone number already has {MAX_PATIENTS_PER_PHONE} patients registered — please select one above.
+              </p>
+            )}
+          </div>
+        )}
+
+        {isNewPatient && (
           <div>
             <label className={labelClass}>{t('booking.yourName')}</label>
             <input
@@ -173,19 +278,7 @@ function BookAppointmentForm({ slug, onCheckStatus }) {
             />
             {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
           </div>
-
-          <div>
-            <label className={labelClass}>{t('booking.phoneNumber')}</label>
-            <input
-              type="tel"
-              placeholder="+91"
-              value={phone}
-              onChange={(e) => { setPhone(e.target.value); clearFieldError('phone') }}
-              className={inputClass}
-            />
-            {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
-          </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

@@ -39,6 +39,7 @@ const StaffPage = lazy(() => import('./pages/hospitalAdmin/StaffPage'))
 const DoctorsPage = lazy(() => import('./pages/hospitalAdmin/DoctorsPage'))
 const MySchedulePage = lazy(() => import('./pages/hospitalAdmin/MySchedulePage'))
 const DoctorProfileEditor = lazy(() => import('./pages/hospitalAdmin/DoctorProfileEditor'))
+const PatientLookupPage = lazy(() => import('./pages/hospitalAdmin/PatientLookupPage'))
 const BillingPage = lazy(() => import('./pages/hospitalAdmin/BillingPage'))
 const PrescriptionsPage = lazy(() => import('./pages/hospitalAdmin/PrescriptionsPage'))
 const ChatbotPage = lazy(() => import('./pages/hospitalAdmin/ChatbotPage'))
@@ -150,6 +151,7 @@ function App() {
                     <Route element={<RequireRole allowedRoles={[ROLES.DOCTOR]} />}>
                       <Route path="schedule" element={<MySchedulePage />} />
                       <Route path="profile" element={<DoctorProfileEditor />} />
+                      <Route path="patient-lookup" element={<PatientLookupPage />} />
                     </Route>
 
                     {/* Hospital admin + receptionist, and only if the Super

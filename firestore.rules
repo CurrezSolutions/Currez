@@ -218,6 +218,33 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Doc ID is `{hospitalId}::{digitsOnlyPhone}` — same unguessable-ID-by-
+    // phone-number pattern as phoneLookup below, applied to patients instead
+    // of appointments: lets the unauthenticated public booking form (and the
+    // doctor's phone-search "Find Patient" page) see which patients are
+    // already registered under a phone number — just { id, name }, not the
+    // full patient record — before creating a duplicate, without ever
+    // granting public query access to the patients collection itself. The
+    // `patients` array is capped at MAX_PATIENTS_PER_PHONE (5, see
+    // src/firebase/patients.js) on both create and update so the cap holds
+    // even if the SDK is called directly, not just via the app's own
+    // transaction logic.
+    match /patientsByPhone/{lookupId} {
+      allow get: if true;
+      allow list: if isSuperAdmin() || isHospitalStaffOf(resource.data.hospitalId);
+      allow create: if request.resource.data.hospitalId is string &&
+                       request.resource.data.phone is string &&
+                       request.resource.data.patients is list &&
+                       request.resource.data.patients.size() >= 1 &&
+                       request.resource.data.patients.size() <= 5;
+      allow update: if request.resource.data.hospitalId == resource.data.hospitalId &&
+                       request.resource.data.phone == resource.data.phone &&
+                       request.resource.data.patients is list &&
+                       request.resource.data.patients.size() >= resource.data.patients.size() &&
+                       request.resource.data.patients.size() <= 5;
+      allow delete: if isSuperAdmin();
+    }
+
     match /appointments/{appointmentId} {
       // The doc ID doubles as an unguessable public lookup token (see
       // getAppointmentByToken) — anyone who has it can fetch that one

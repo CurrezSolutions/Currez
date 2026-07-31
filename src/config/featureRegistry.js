@@ -92,6 +92,16 @@ export const FEATURE_REGISTRY = [
     isCore: true,
   },
   {
+    key: 'patientLookup',
+    label: 'Find Patient',
+    description: "Search a phone number for a doctor's own registered patients, their appointment time and visit history.",
+    icon: 'search',
+    path: 'patient-lookup',
+    allowedRoles: [ROLES.DOCTOR],
+    category: FEATURE_CATEGORIES.CORE,
+    isCore: true,
+  },
+  {
     key: 'chatbot',
     label: 'Chatbot',
     description: 'AI assistant that helps patients book appointments, ask hospital questions and navigate services.',
