@@ -9,13 +9,18 @@ import {
   bedKey,
   getOccupiedMap,
   countBedsUnder,
+  getBedTypeColor,
+  BED_TYPE_COLOR_PALETTE,
 } from '../../utils/bedManagement'
 
+// Colors follow BED_TYPE_COLOR_PALETTE's fixed order (slot 1-4) so the
+// out-of-the-box look is already colorblind-safe — ICU defaults to yellow,
+// matching how hospitals commonly color-code that department.
 const DEFAULT_BED_TYPES = {
-  general: { label: 'General', ratePerDay: 500 },
-  semiPrivate: { label: 'Semi-Private', ratePerDay: 1500 },
-  private: { label: 'Private Room', ratePerDay: 3000 },
-  icu: { label: 'ICU', ratePerDay: 5000 },
+  general: { label: 'General', ratePerDay: 500, color: BED_TYPE_COLOR_PALETTE[0] },
+  semiPrivate: { label: 'Semi-Private', ratePerDay: 1500, color: BED_TYPE_COLOR_PALETTE[1] },
+  private: { label: 'Private Room', ratePerDay: 3000, color: BED_TYPE_COLOR_PALETTE[2] },
+  icu: { label: 'ICU', ratePerDay: 5000, color: BED_TYPE_COLOR_PALETTE[3] },
 }
 
 function bedCountLabel(n) {
@@ -275,7 +280,10 @@ function BedConfigBuilder({ config, activeAdmissions, onSave, onClose }) {
   // ── Bed types ───────────────────────────────────────────────────────────
   function addBedType() {
     const key = `type-${Date.now()}`
-    setBedTypes((prev) => ({ ...prev, [key]: { label: 'New Type', ratePerDay: 0 } }))
+    setBedTypes((prev) => ({
+      ...prev,
+      [key]: { label: 'New Type', ratePerDay: 0, color: BED_TYPE_COLOR_PALETTE[Object.keys(prev).length % BED_TYPE_COLOR_PALETTE.length] },
+    }))
   }
   function updateBedType(key, patch) {
     setBedTypes((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }))
@@ -434,6 +442,13 @@ function BedTypesEditor({ bedTypes, onAdd, onUpdate, onRemove }) {
       <div className="flex flex-wrap gap-2">
         {Object.entries(bedTypes).map(([key, bt]) => (
           <div key={key} className="flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5">
+            <input
+              type="color"
+              value={bt.color || '#2a78d6'}
+              onChange={(e) => onUpdate(key, { color: e.target.value })}
+              title="Color for this bed type — shown on every bed of this type"
+              className="h-5 w-5 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0"
+            />
             <input
               type="text"
               value={bt.label}
@@ -700,6 +715,7 @@ function BedList({ beds, bedTypes, onRemove, onUpdate }) {
             onChange={(e) => onUpdate(idx, { bedId: e.target.value })}
             className="w-16 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] font-bold text-heading outline-none focus:border-indigo-500/50 focus:bg-surface"
           />
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: getBedTypeColor(bedTypes, bed.type) }} />
           <select
             value={bed.type}
             onChange={(e) => onUpdate(idx, { type: e.target.value })}

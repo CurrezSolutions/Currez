@@ -221,6 +221,7 @@ function BedManagementPage({ tenantSlug }) {
           <BedStatsPanel
             stats={stats}
             allBeds={allBeds}
+            bedTypes={config?.bedTypes}
             activeAdmissions={activeAdmissions || []}
             onBedSelect={handleBedSelect}
           />
@@ -252,6 +253,7 @@ function BedManagementPage({ tenantSlug }) {
 
           <BedGrid
             floors={config?.floors || []}
+            bedTypes={config?.bedTypes}
             activeAdmissions={activeAdmissions}
             selectedFloorId={selectedFloorId}
             wardFilter={wardFilter}

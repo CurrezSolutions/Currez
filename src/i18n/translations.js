@@ -121,6 +121,11 @@ export const translations = {
     "status.cancelledHint": "This appointment was cancelled.",
     "status.prescription": "Prescription",
     "status.testsAdvised": "Tests advised",
+    "status.tabCurrent": "Current",
+    "status.tabPast": "Past",
+    "status.noCurrentAppointments":
+      "No current appointments — nothing pending or upcoming.",
+    "status.noPastAppointments": "No past appointments yet.",
 
     "day.monday": "Monday",
     "day.tuesday": "Tuesday",
@@ -241,6 +246,11 @@ export const translations = {
     "status.cancelledHint": "यह अपॉइंटमेंट रद्द कर दी गई थी।",
     "status.prescription": "नुस्खा",
     "status.testsAdvised": "सुझाई गई जांच",
+    "status.tabCurrent": "वर्तमान",
+    "status.tabPast": "पिछली",
+    "status.noCurrentAppointments":
+      "कोई वर्तमान अपॉइंटमेंट नहीं — कोई लंबित या आगामी अनुरोध नहीं है।",
+    "status.noPastAppointments": "अभी तक कोई पिछली अपॉइंटमेंट नहीं है।",
 
     "day.monday": "सोमवार",
     "day.tuesday": "मंगलवार",
@@ -361,6 +371,11 @@ export const translations = {
     "status.cancelledHint": "ही अपॉइंटमेंट रद्द करण्यात आली होती.",
     "status.prescription": "औषध यादी",
     "status.testsAdvised": "सुचवलेल्या तपासण्या",
+    "status.tabCurrent": "सद्य",
+    "status.tabPast": "मागील",
+    "status.noCurrentAppointments":
+      "कोणतीही सद्य अपॉइंटमेंट नाही — कोणतीही प्रलंबित किंवा आगामी विनंती नाही.",
+    "status.noPastAppointments": "अद्याप कोणतीही मागील अपॉइंटमेंट नाही.",
 
     "day.monday": "सोमवार",
     "day.tuesday": "मंगळवार",

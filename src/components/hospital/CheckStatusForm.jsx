@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getAppointmentByToken, getAppointmentsByPhone } from '../../firebase/appointments'
 import { subscribeHospital } from '../../firebase/hospitals'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -43,9 +43,30 @@ function CheckStatusForm({ slug }) {
   const [results, setResults] = useState(undefined)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // 'current' (pending/scheduled — what a patient actually needs to act on
+  // or track) is the default tab, since a phone number with a long booking
+  // history would otherwise bury the one appointment that still matters
+  // under every past visit. 'past' (completed/cancelled) is opt-in.
+  const [tab, setTab] = useState('current')
   const { errors, validate, clearFieldError } = useFormValidation({
     phone: [validators.phone('Enter a valid phone number.')],
   })
+
+  const current = useMemo(
+    () =>
+      (results || [])
+        .filter((r) => r.status === 'pending' || r.status === 'scheduled')
+        .sort((a, b) => `${a.date}T${a.time || ''}`.localeCompare(`${b.date}T${b.time || ''}`)),
+    [results]
+  )
+  const past = useMemo(
+    () =>
+      (results || [])
+        .filter((r) => r.status === 'completed' || r.status === 'cancelled')
+        .sort((a, b) => `${b.date}T${b.time || ''}`.localeCompare(`${a.date}T${a.time || ''}`)),
+    [results]
+  )
+  const visible = tab === 'current' ? current : past
 
   useEffect(() => subscribeHospital(slug, setHospital), [slug])
 
@@ -53,6 +74,7 @@ function CheckStatusForm({ slug }) {
     e.preventDefault()
     setError('')
     setResults(undefined)
+    setTab('current')
 
     const trimmedToken = token.trim()
     const trimmedPhone = phone.trim()
@@ -146,10 +168,37 @@ function CheckStatusForm({ slug }) {
           patient scanning several past/upcoming visits needs a quick list
           to scan, not every field of every visit expanded at once. */}
       {results && (
-        <div className="mt-6 space-y-3">
-          {results.map((result) => (
-            <StatusResultCard key={result.id} result={result} t={t} defaultOpen={results.length === 1} />
-          ))}
+        <div className="mt-6">
+          {results.length > 1 && (
+            <div className="flex gap-1.5 rounded-lg bg-card-strong p-1">
+              {[
+                ['current', t('status.tabCurrent'), current.length],
+                ['past', t('status.tabPast'), past.length],
+              ].map(([key, label, count]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    tab === key ? 'bg-card text-heading shadow-sm' : 'text-muted hover:text-heading'
+                  }`}
+                >
+                  {label} <span className="text-xs text-faint">({count})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 space-y-3">
+            {visible.map((result) => (
+              <StatusResultCard key={result.id} result={result} t={t} defaultOpen={results.length === 1} />
+            ))}
+            {visible.length === 0 && (
+              <p className="rounded-lg border border-line bg-card-strong px-4 py-6 text-center text-sm text-muted">
+                {tab === 'current' ? t('status.noCurrentAppointments') : t('status.noPastAppointments')}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

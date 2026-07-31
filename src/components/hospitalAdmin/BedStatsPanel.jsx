@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import Modal from '../common/Modal'
-import { bedKey, getOccupiedMap, getBedDisplayStatus, formatBedLocation } from '../../utils/bedManagement'
+import { bedKey, getOccupiedMap, getBedDisplayStatus, formatBedLocation, getBedTypeColor } from '../../utils/bedManagement'
 
-function BedStatsPanel({ stats, allBeds, activeAdmissions, onBedSelect }) {
+function BedStatsPanel({ stats, allBeds, bedTypes, activeAdmissions, onBedSelect }) {
   const [modalStatus, setModalStatus] = useState(null)
   const [modalSearch, setModalSearch] = useState('')
 
@@ -71,6 +71,28 @@ function BedStatsPanel({ stats, allBeds, activeAdmissions, onBedSelect }) {
                 <span className="truncate font-medium">{ward.name}</span>
                 <span className="shrink-0 pl-2 text-faint">
                   {ward.occupied}/{ward.total}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Department/type color key (e.g. ICU = yellow, per BedConfigBuilder's
+          color picker) — lets staff match a color seen on the grid back to a
+          department without hovering every bed. */}
+      {Object.keys(stats.byType).length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-faint">By Type</h3>
+          <div className="flex flex-col gap-1">
+            {Object.entries(stats.byType).map(([key, t]) => (
+              <div key={key} className="flex items-center justify-between rounded-lg px-3 py-2 text-xs text-body">
+                <span className="flex items-center gap-2 truncate font-medium">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: getBedTypeColor(bedTypes, key) }} />
+                  {bedTypes?.[key]?.label || key.replace(/([A-Z])/g, ' $1').trim()}
+                </span>
+                <span className="shrink-0 pl-2 text-faint">
+                  {t.occupied}/{t.count}
                 </span>
               </div>
             ))}

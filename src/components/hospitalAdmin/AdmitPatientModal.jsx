@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import Modal from '../common/Modal'
-import { formatBedLocation } from '../../utils/bedManagement'
+import { formatBedLocation, getBedTypeColor } from '../../utils/bedManagement'
 
 function AdmitPatientModal({ bed, config, patients, doctors, onAdmit, onClose }) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -75,7 +75,8 @@ function AdmitPatientModal({ bed, config, patients, doctors, onAdmit, onClose })
     <Modal onClose={onClose} className="max-w-lg">
       <h2 className="mb-1 text-lg font-bold text-heading">Admit Patient</h2>
       <div className="mb-5">
-        <p className="text-sm text-muted">
+        <p className="flex items-center gap-1.5 text-sm text-muted">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: getBedTypeColor(config?.bedTypes, bed?.type) }} />
           Bed {bed?.bedId} — {bedType.label} — ₹{bedType.ratePerDay.toLocaleString('en-IN')}/day
         </p>
         {bed && formatBedLocation(bed) && <p className="text-xs text-faint">{formatBedLocation(bed)}</p>}

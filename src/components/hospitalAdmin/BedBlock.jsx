@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import BedIcon from './BedIcon'
-import { computeDaysSince, computeRunningCharges, getBedDisplayStatus } from '../../utils/bedManagement'
+import { computeDaysSince, computeRunningCharges, getBedDisplayStatus, getBedTypeColor } from '../../utils/bedManagement'
 
 const STYLES = {
   vacant:
@@ -11,7 +11,7 @@ const STYLES = {
     'bg-slate-500/8 border-slate-500/25 text-slate-400 dark:text-slate-500 cursor-not-allowed',
 }
 
-function BedBlock({ bed, admission, onSelect, canManage, onToggleMaintenance, onTransferRequest }) {
+function BedBlock({ bed, bedTypes, admission, onSelect, canManage, onToggleMaintenance, onTransferRequest }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const rawStatus = getBedDisplayStatus(bed, admission)
 
@@ -21,20 +21,30 @@ function BedBlock({ bed, admission, onSelect, canManage, onToggleMaintenance, on
   const clickable = rawStatus !== 'maintenance' || !!admission
   const showQuickAction = canManage
 
+  // Department/type color (e.g. ICU = yellow) — a separate signal from the
+  // vacant/occupied/maintenance border color above, so a bed's department is
+  // identifiable at a glance without waiting to read the text label.
+  const typeColor = getBedTypeColor(bedTypes, bed.type)
+  const typeLabel = bedTypes?.[bed.type]?.label || (bed.type || 'general').replace(/([A-Z])/g, ' $1').trim()
+
   return (
     <div className="group relative">
       <button
         type="button"
         disabled={!clickable}
         onClick={() => clickable && onSelect?.(bed, admission)}
-        className={`flex w-full min-w-28 flex-col items-center gap-1.5 rounded-2xl border p-3 transition-all duration-200 ${STYLES[rawStatus]} ${!clickable ? 'opacity-70' : ''}`}
+        style={{ borderTopColor: typeColor, borderTopWidth: '3px' }}
+        className={`flex w-full min-w-28 flex-col items-center gap-1.5 rounded-2xl border p-3 pt-2.5 transition-all duration-200 ${STYLES[rawStatus]} ${!clickable ? 'opacity-70' : ''}`}
       >
         <BedIcon status={rawStatus} className="h-7 w-7" />
 
         <span className="text-xs font-bold tracking-wide text-heading">{bed.bedId}</span>
 
-        <span className="text-[10px] font-medium uppercase tracking-wider text-faint">
-          {(bed.type || 'general').replace(/([A-Z])/g, ' $1').trim()}
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider"
+          style={{ backgroundColor: `color-mix(in srgb, ${typeColor} 16%, transparent)`, color: typeColor }}
+        >
+          {typeLabel}
         </span>
 
         {rawStatus === 'occupied' && admission ? (

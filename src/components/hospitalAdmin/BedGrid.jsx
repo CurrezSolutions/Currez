@@ -6,7 +6,7 @@ import { bedKey, getOccupiedMap, countBedsUnder } from '../../utils/bedManagemen
 // directly on the floor with no ward/room at all. Every level is optional,
 // so a hospital can mix "Floor → Room → Bed", "Floor → Ward → Bed" and the
 // full "Floor → Ward → Room → Bed" shape side by side.
-function BedGrid({ floors, activeAdmissions, selectedFloorId, wardFilter, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
+function BedGrid({ floors, bedTypes, activeAdmissions, selectedFloorId, wardFilter, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
   const occupiedMap = getOccupiedMap(activeAdmissions || [])
 
   function admissionFor(bed) {
@@ -59,6 +59,7 @@ function BedGrid({ floors, activeAdmissions, selectedFloorId, wardFilter, onBedS
                   title={`${floor.name} — Beds`}
                   beds={directBeds.map((b) => ({ ...b, floorId: floor.id, floorName: floor.name, wardId: null, wardName: null, roomId: null, roomName: null }))}
                   admissionFor={admissionFor}
+                  bedTypes={bedTypes}
                   onBedSelect={onBedSelect}
                   canManage={canManage}
                   onToggleMaintenance={onToggleMaintenance}
@@ -81,6 +82,7 @@ function BedGrid({ floors, activeAdmissions, selectedFloorId, wardFilter, onBedS
                       roomName: room.name,
                     }))}
                     admissionFor={admissionFor}
+                    bedTypes={bedTypes}
                     onBedSelect={onBedSelect}
                     canManage={canManage}
                     onToggleMaintenance={onToggleMaintenance}
@@ -113,6 +115,7 @@ function BedGrid({ floors, activeAdmissions, selectedFloorId, wardFilter, onBedS
                           label={null}
                           beds={wardBeds}
                           admissionFor={admissionFor}
+                          bedTypes={bedTypes}
                           onBedSelect={onBedSelect}
                           canManage={canManage}
                           onToggleMaintenance={onToggleMaintenance}
@@ -133,6 +136,7 @@ function BedGrid({ floors, activeAdmissions, selectedFloorId, wardFilter, onBedS
                             roomName: room.name,
                           }))}
                           admissionFor={admissionFor}
+                          bedTypes={bedTypes}
                           onBedSelect={onBedSelect}
                           canManage={canManage}
                           onToggleMaintenance={onToggleMaintenance}
@@ -167,7 +171,7 @@ function countOccupied(ward, floor, admissionFor) {
   return n
 }
 
-function ZoneCard({ title, beds, admissionFor, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
+function ZoneCard({ title, beds, admissionFor, bedTypes, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
   const occupied = beds.filter((b) => admissionFor(b)).length
   return (
     <div className="rounded-2xl border border-line/80 bg-surface p-4">
@@ -180,6 +184,7 @@ function ZoneCard({ title, beds, admissionFor, onBedSelect, canManage, onToggleM
           <BedBlock
             key={bed.bedId}
             bed={bed}
+            bedTypes={bedTypes}
             admission={admissionFor(bed)}
             onSelect={onBedSelect}
             canManage={canManage}
@@ -192,7 +197,7 @@ function ZoneCard({ title, beds, admissionFor, onBedSelect, canManage, onToggleM
   )
 }
 
-function BedSubSection({ label, beds, admissionFor, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
+function BedSubSection({ label, beds, admissionFor, bedTypes, onBedSelect, canManage, onToggleMaintenance, onTransferRequest }) {
   return (
     <div>
       {label && (
@@ -208,6 +213,7 @@ function BedSubSection({ label, beds, admissionFor, onBedSelect, canManage, onTo
           <BedBlock
             key={bed.bedId}
             bed={bed}
+            bedTypes={bedTypes}
             admission={admissionFor(bed)}
             onSelect={onBedSelect}
             canManage={canManage}

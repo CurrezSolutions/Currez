@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import Modal from '../common/Modal'
-import { bedKey, formatBedLocation, getBedDisplayStatus, getOccupiedMap } from '../../utils/bedManagement'
+import { bedKey, formatBedLocation, getBedDisplayStatus, getOccupiedMap, getBedTypeColor } from '../../utils/bedManagement'
 
 // Moves an already-admitted patient to a different vacant bed in place —
 // the alternative to discharge-then-readmit, which used to fragment one
@@ -87,7 +87,10 @@ function TransferBedModal({ admission, allBeds, activeAdmissions, config, onTran
                 className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-left transition-colors hover:border-emerald-500/30 hover:bg-emerald-500/10 disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-heading">{bed.bedId}</span>
+                  <span className="flex items-center gap-1.5 text-sm font-bold text-heading">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: getBedTypeColor(config?.bedTypes, bed.type) }} />
+                    {bed.bedId}
+                  </span>
                   <span className="text-xs font-medium text-muted">₹{rate.toLocaleString('en-IN')}/day</span>
                 </div>
                 <div className="mt-1 text-[11px] text-muted">{formatBedLocation(bed)}</div>

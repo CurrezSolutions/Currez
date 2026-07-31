@@ -1,3 +1,33 @@
+// Fixed-order categorical palette for bed types (department color-coding —
+// e.g. ICU shows yellow) so colors stay distinguishable at a glance instead
+// of being picked ad hoc. Order matters more than any individual hex: it's
+// what keeps adjacent colors distinguishable for colorblind users, so new
+// types are assigned the next slot in this order, never a random one.
+export const BED_TYPE_COLOR_PALETTE = [
+  '#2a78d6', // blue
+  '#eb6834', // orange
+  '#1baf7a', // aqua
+  '#eda100', // yellow
+  '#e87ba4', // magenta
+  '#008300', // green
+  '#4a3aa7', // violet
+  '#e34948', // red
+]
+
+// Resolves a bed type's display color: whatever the hospital's config
+// explicitly set (see BedConfigBuilder's color picker) or, for configs saved
+// before this feature existed and for unknown/custom type keys, a
+// deterministic fallback so the same type always renders the same color
+// across sessions instead of a random one.
+export function getBedTypeColor(bedTypes, typeKey) {
+  const explicit = bedTypes?.[typeKey]?.color
+  if (explicit) return explicit
+  const key = typeKey || 'general'
+  let hash = 0
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+  return BED_TYPE_COLOR_PALETTE[hash % BED_TYPE_COLOR_PALETTE.length]
+}
+
 // Build a unique composite key for a bed's position in the hierarchy.
 // wardId/roomId are optional (a bed can sit directly on a floor or directly
 // in a ward) so missing segments fall back to a stable placeholder — that
